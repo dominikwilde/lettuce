@@ -76,7 +76,7 @@ class UnitConversion:
                 * (self.characteristic_length_pu/self.characteristic_velocity_pu))
 
     def convert_time_to_lu(self, time_in_pu):
-        return (time_in_pu / (self.characteristic_length_pu/self.characteristic_velocity_pu)
+        return int(time_in_pu / (self.characteristic_length_pu/self.characteristic_velocity_pu)
                 * (self.characteristic_length_lu/self.characteristic_velocity_lu))
 
     def convert_density_lu_to_pressure_pu(self, density_lu):

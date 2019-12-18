@@ -47,20 +47,23 @@ class TRTCollision:
     """Two relaxation time collision model - standard implementation (cf. Krüger 2017)
         """
 
-    def __init__(self, lattice, tau, tau_minus=1.0):
+    def __init__(self, lattice, tau, tau_minus=1.0, force=None):
         self.lattice = lattice
         self.tau_plus = tau
         self.tau_minus = tau_minus
+        self.force = force
 
     def __call__(self, f):
         rho = self.lattice.rho(f)
-        u = self.lattice.u(f)
+        u_eq = 0 if self.force is None else self.force.u_eq(f)
+        u = self.lattice.u(f) + u_eq
         feq = self.lattice.equilibrium(rho, u)
         f_diff_neq = ((f + f[self.lattice.stencil.opposite]) - (feq + feq[self.lattice.stencil.opposite])) / (
                 2.0 * self.tau_plus)
         f_diff_neq += ((f - f[self.lattice.stencil.opposite]) - (feq - feq[self.lattice.stencil.opposite])) / (
                 2.0 * self.tau_minus)
-        f = f - f_diff_neq
+        Si = 0 if self.force is None else self.force.source_term(u)
+        f = f - f_diff_neq + Si
         return f
 
 
