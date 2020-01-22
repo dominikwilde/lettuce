@@ -93,7 +93,7 @@ class EnergyReporter:
         self.interval = interval
         self.out = [] if out is None else out
         if not isinstance(self.out, list):
-            print("time      kinetic energy", file=self.out)
+            print("steps    time      kinetic energy", file=self.out)
 
     def __call__(self, i, t, f):
         if t % self.interval == 0:
@@ -104,7 +104,7 @@ class EnergyReporter:
             if isinstance(self.out, list):
                 self.out.append([t, kinE.item()])
             else:
-                print(t, kinE.item(), file=self.out)
+                print(t, self.flow.units.convert_time_to_pu(t), kinE.item(), file=self.out)
 
 
 

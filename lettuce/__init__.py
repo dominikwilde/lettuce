@@ -16,7 +16,7 @@ from lettuce.equilibrium import *
 from lettuce.stencils import *
 from lettuce.moments import *
 from lettuce.io import *
-
+#from lettuce.compressible import *
 from lettuce.collision import *
 from lettuce.streaming import *
 from lettuce.boundary import *
