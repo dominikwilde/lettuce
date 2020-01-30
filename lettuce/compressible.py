@@ -1,6 +1,7 @@
 import numpy as np
 from lettuce import Stencil, UnitConversion, Lattice, Simulation, LettuceException, BounceBackBoundary
 import torch
+from timeit import default_timer as timer
 
 
 class D2Q37(Stencil):
@@ -11,11 +12,13 @@ class D2Q37(Stencil):
     w = np.array(
         [0.233151] + [0.107306] * 4 + [0.0576679] * 4 + [0.0142082] * 4 + [0.00535305] * 8 + [0.00101194] * 4 + [
             0.000245301] * 4 + [0.000283414] * 8)
-    cs = 1.196979 #1. / 6 * np.sqrt(49 - (119 + (469 + 252 * np.sqrt(30)) ** (2. / 3)) / ((469 + 252 * np.sqrt(30)) ** (1. / 3.)))  #
+    cs = 1/1.1969797752#0.83546599  # 1.1969797752 #1. / 6 * np.sqrt(49 - (119 + (469 + 252 * np.sqrt(30)) ** (2. / 3)) / ((469 + 252
+    # * np.sqrt(30)) ** (1. / 3.)))  #
     opposite = [
         0, 2, 1, 4, 3, 6, 5, 8, 7, 10, 9, 12, 11, 14, 13,
         16, 15, 18, 17, 20, 19, 22, 21, 24, 23, 26, 25, 28, 27, 30, 29, 32, 31, 34, 33, 36, 35
     ]
+
 
 def makeD2Q25HWeights():
     r = (np.sqrt(5.) - np.sqrt(2.)) / np.sqrt(3.)
@@ -32,6 +35,7 @@ def makeD2Q25HWeights():
     w = np.asarray(result)
     return w
 
+
 def makeD2Q25HSpeeds():
     c_m = np.sqrt(5. - np.sqrt(10.))  # /np.sqrt(3.)
     c_n = np.sqrt(5. + np.sqrt(10.))  # /np.sqrt(3.)
@@ -42,38 +46,39 @@ def makeD2Q25HSpeeds():
     e = np.asarray(e)
     return e
 
-class D2Q25H(Stencil):
 
+class D2Q25H(Stencil):
     e = makeD2Q25HSpeeds()
     w = makeD2Q25HWeights()
 
     cs = 1
 
+
 class HermiteEquilibrium:
     def __init__(self, lattice):
         self.lattice = lattice
         e = lattice.e
-        cs2 = lattice.cs*lattice.cs
+        cs2 = lattice.cs * lattice.cs
         Q = e.shape[0]
         D = e.shape[1]
 
-        #Calculate Hermite polynomials
-        self.H0=1
-        self.H1 = torch.zeros([Q, D],dtype=lattice.dtype)
-        self.H2 = torch.zeros([Q, D, D],dtype=lattice.dtype)
-        self.H3 = torch.zeros([Q, D, D, D],dtype=lattice.dtype)
-        self.H4 = torch.zeros([Q, D, D, D, D],dtype=lattice.dtype)
+        # Calculate Hermite polynomials
+        self.H0 = 1
+        self.H1 = torch.zeros([Q, D], dtype=lattice.dtype,device=lattice.device)
+        self.H2 = torch.zeros([Q, D, D], dtype=lattice.dtype,device=lattice.device)
+        self.H3 = torch.zeros([Q, D, D, D], dtype=lattice.dtype,device=lattice.device)
+        self.H4 = torch.zeros([Q, D, D, D, D], dtype=lattice.dtype,device=lattice.device)
 
         for a in range(D):
-            self.H1[:,a]= e[:,a]
+            self.H1[:, a] = e[:, a]
             for b in range(D):
-                e_ab =  e[:,a]*e[:,b]
+                e_ab = e[:, a] * e[:, b]
                 self.H2[:, a, b] = e_ab
-                if(a==b):
+                if (a == b):
                     self.H2[:, a, b] -= cs2
                 for c in range(D):
-                    e_abc = e_ab*e[:,c]
-                    self.H3[:,a,b,c] = e_abc
+                    e_abc = e_ab * e[:, c]
+                    self.H3[:, a, b, c] = e_abc
                     if a == b:
                         self.H3[:, a, b, c] -= e[:, c] * cs2
                     if b == c:
@@ -81,7 +86,7 @@ class HermiteEquilibrium:
                     if a == c:
                         self.H3[:, a, b, c] -= e[:, b] * cs2
                     for d in range(D):
-                        self.H4[:,a,b,c,d] = e_abc * e[:,d]
+                        self.H4[:, a, b, c, d] = e_abc * e[:, d]
                         if a == b:
                             if c == d:
                                 self.H4[:, a, b, c, d] += cs2 * cs2
@@ -104,65 +109,72 @@ class HermiteEquilibrium:
                         if c == d:
                             self.H4[:, a, b, c, d] -= cs2 * e[:, a] * e[:, b]
 
-    def __call__(self, rho, u, T, *args):
+    def __call__(self, rho, u, T, order=4, *args):
         D = self.lattice.e.shape[1]
-        eye=torch.eye(2)
 
-        cs2 = self.lattice.cs*self.lattice.cs
-        T_1 = (T - 1) * cs2
+        cs2 = self.lattice.cs * self.lattice.cs
+        T_1 = ((T - 1) * cs2)[0]
         a0 = 1
         a1 = u
-        a2 = self.lattice.einsum('a,b->ab',[a1,a1]) + torch.eye(2)*T_1
-        a3 = self.lattice.einsum('ab,c->abc',[self.lattice.einsum('a,b->ab',[a1,a1]),a1])
+        a2 = self.lattice.einsum('a,b->ab', [a1, a1]) #+ torch.eye(2) * T_1
+        for a in range(D):
+            for b in range(D):
+                if a==b:
+                    a2[a,b]+=T_1
+        a3 = self.lattice.einsum('ab,c->abc', [self.lattice.einsum('a,b->ab', [a1, a1]), a1])
 
+        for a in range(D):
+            for b in range(D):
+                for c in range(D):
+                    if a==b:
+                        a3[a, b, c] += T_1 * u[c]
+                    if b==c:
+                        a3[a, b, c] += T_1 * u[a]
+                    if a==c:
+                        a3[a, b, c] += T_1 * u[b]
 
-        for c in range(D):
-            a3[:, :, c] += T_1 * eye * u[c]
-            a3[:, c, :] += T_1 * eye * u[c]
-            a3[c, :, :] += T_1 * eye * u[c]
-
-        a4 = self.lattice.einsum('abc,d->abcd',[self.lattice.einsum('ab,c->abc',[self.lattice.einsum('a,b->ab',[a1,a1]),a1]),a1])
+        a4 = self.lattice.einsum('abc,d->abcd',
+                                 [self.lattice.einsum('ab,c->abc', [self.lattice.einsum('a,b->ab', [a1, a1]), a1]), a1])
         for a in range(D):
             for b in range(D):
                 for c in range(D):
                     for d in range(D):
-                        if (a==b):
-                            a4[a,b,c,d] += u[c]*u[d]*T_1
-                        if (a==c):
-                            a4[a,b,c,d] += u[b]*u[d]*T_1
-                        if (a==d):
-                            a4[a,b,c,d] += u[c]*u[b]*T_1
-                        if (b==c):
-                            a4[a,b,c,d] += u[a]*u[d]*T_1
-                        if (b==d):
-                            a4[a,b,c,d] += u[a]*u[c]*T_1
-                        if (c==d):
-                            a4[a,b,c,d] += u[a]*u[b]*T_1
+                        if (a == b):
+                            a4[a, b, c, d] += u[c] * u[d] * T_1
+                        if (a == c):
+                            a4[a, b, c, d] += u[b] * u[d] * T_1
+                        if (a == d):
+                            a4[a, b, c, d] += u[c] * u[b] * T_1
+                        if (b == c):
+                            a4[a, b, c, d] += u[a] * u[d] * T_1
+                        if (b == d):
+                            a4[a, b, c, d] += u[a] * u[c] * T_1
+                        if (c == d):
+                            a4[a, b, c, d] += u[a] * u[b] * T_1
                         if a == b:
                             if c == d:
-                                a4[a, b, c, d] += T_1*T_1
+                                a4[a, b, c, d] += T_1 * T_1
                         if b == c:
                             if a == d:
-                                a4[a, b, c, d] += T_1*T_1
+                                a4[a, b, c, d] += T_1 * T_1
                         if b == d:
                             if a == c:
-                                a4[a, b, c, d] += T_1*T_1
+                                a4[a, b, c, d] += T_1 * T_1
 
-
-        H0a0 = self.H0*a0
-        H1a1 = self.lattice.einsum('ia,a->i',[self.H1,a1])
-        H2a2 = self.lattice.einsum('iab,ab->i',[self.H2,a2])
-        H3a3 = self.lattice.einsum('iabc,abc->i',[self.H3,a3])
+        H0a0 = self.H0 * a0
+        H1a1 = self.lattice.einsum('ia,a->i', [self.H1, a1])
+        H2a2 = self.lattice.einsum('iab,ab->i', [self.H2, a2])
+        H3a3 = self.lattice.einsum('iabc,abc->i', [self.H3, a3])
         H4a4 = self.lattice.einsum('iabcd,abcd->i', [self.H4, a4])
 
-        feq = self.lattice.w * rho * (
-                    H0a0 + H1a1 / (cs2) + H2a2 / (2 * cs2 * cs2) + H3a3 / (6 * cs2 * cs2 * cs2)
-        + H4a4 / (24 * cs2 * cs2 * cs2 * cs2))
-        print(self.H4[1])
+        feq = rho*self.lattice.einsum('i,i->i', [self.lattice.w,(
+                H0a0 + H1a1 / (cs2) + H2a2 / (2 * cs2 * cs2) + H3a3 / (6 * cs2 * cs2 * cs2)
+                + H4a4 / (24 * cs2 * cs2 * cs2 * cs2))])
         return feq
 
+
 class SodShockTube:
-    def __init__(self, resolution, lattice, T_left=1, rho_left=8):
+    def __init__(self, resolution, lattice, T_left=1.25, rho_left=8):
         self.resolution = resolution
         self.T_left = T_left
         self.rho_left = rho_left
@@ -173,32 +185,65 @@ class SodShockTube:
             characteristic_velocity_pu=1
         )
 
+    def calc_offsets(self, left, right):
+        d = (right / 2 - left / 2)
+        c = 2 * (left) / (right - left) + 1
+        return c, d
 
     def initial_solution(self, x):
+        #Defines the smoothness of the discontinuity
+        a=30
+        rho_c,rho_d=self.calc_offsets(self.rho_left,1.0)
+        T_c,T_d = self.calc_offsets(self.T_left,1.0)
         u = np.array([0 * x[0] + 0 * x[1], 0 * x[0] + 0 * x[1]])
-        rho = np.array([x[0] * 0 + x[1] * 0 + 0.8])
-        T = np.array([x[0] * 0 + x[1] * 0 + 0.8])
-        rho[:,0:int(self.resolution/2),] = 8
+        rho = np.array([(np.tanh(a*(x[0]-0.5))+rho_c)*rho_d+ x[1] * 0 ])
+        T = np.array([(np.tanh(a*(x[0]-0.5))+T_c)*T_d + x[1] * 0])
+
         return rho, u, T
 
     @property
     def grid(self):
-        x = np.linspace(0, 1, num=self.resolution, endpoint=False)
+        x = np.linspace(0, 1, num=self.resolution, endpoint=True)
         y = np.linspace(0, 1, num=5, endpoint=False)
         return np.meshgrid(x, y, indexing='ij')
 
     @property
     def boundaries(self):
         x, y = self.grid
-        return [BounceBackBoundary(np.abs(x) < 1e-6, self.units.lattice),BounceBackBoundary(np.abs(x) -1  < 1e-6, self.units.lattice)]
+        return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice)]
 
 
 class CompressibleLattice(Lattice):
-    def temperature(self, f):
+    def temperature(self, f, g, C_v):
         u = self.u(f)
-        diff = (self.e - u)*(self.e - u)
+        index = [Ellipsis] + [None] * self.D
+        diff = (self.e[index] - u ) * (self.e[index] - u)
         prod = torch.sum(diff, axis=1)
-        return self.einsum("i,i->", [prod, f])  / (self.rho(f)*self.cs * self.cs * 2)
+        f_sum = (self.einsum("i,i->i", [prod, f]))
+        fg_sum = (f_sum/(self.cs * self.cs) + g).sum(axis=0)
+        return  fg_sum/ (self.rho(f) * 2*C_v)
+
+class BGKCompressibleCollision:
+    def __init__(self, lattice, tau, gamma):
+        self.lattice = lattice
+        self.tau = tau
+        self.gamma = gamma
+
+    def __call__(self, f, g):
+
+        C_v = 1./(self.gamma - 1)
+        rho = self.lattice.rho(f)
+        u = self.lattice.u(f)
+        T = self.lattice.temperature(f,g,C_v)
+        feq = self.lattice.equilibrium(rho, u, T)
+
+
+        geq = (2*C_v-self.lattice.D)*T*feq
+
+        f_post= f - 1.0 / self.tau * (f-feq)
+        g_post = g - 1.0 / self.tau *(g-geq)
+        return f_post,g_post
+
 
 
 class CompressibleSimulation(Simulation):
@@ -208,6 +253,8 @@ class CompressibleSimulation(Simulation):
         self.collision = collision
         self.streaming = streaming
         self.i = 0
+        self.lattice.equilibrium=HermiteEquilibrium(lattice)
+        self.reporters = []
 
         grid = flow.grid
         rho, u, T = flow.initial_solution(grid)
@@ -220,9 +267,11 @@ class CompressibleSimulation(Simulation):
                              f"Expected {[lattice.D] + list(grid[0].shape)}, "
                              f"but got {list(u.shape)}.")
 
-        self.f = lattice.equilibrium(lattice.convert_to_tensor(rho), lattice.convert_to_tensor(u))
+        self.f = lattice.equilibrium(lattice.convert_to_tensor(rho), lattice.convert_to_tensor(u),lattice.convert_to_tensor(T))
+        gamma = 1.4
+        C_v = 1/(gamma - 1)
+        self.g = (2*C_v-lattice.D)*lattice.convert_to_tensor(T)*self.f
 
-        self.reporters = []
 
         # Define a mask, where the collision shall not be applied
         x = flow.grid
@@ -232,4 +281,23 @@ class CompressibleSimulation(Simulation):
             if boundary.__class__.__name__ == "BounceBackBoundary":
                 self.no_collision_mask = boundary.mask | self.no_collision_mask
 
-
+    def step(self, num_steps):
+        """Take num_steps stream-and-collision steps and return performance in MLUPS."""
+        start = timer()
+        for _ in range(num_steps):
+            self.i += 1
+            self.f = self.streaming(self.f)
+            self.g = self.streaming(self.g)
+                # Perform the collision routine everywhere, expect where the no_collision_mask is true
+            self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f,self.g)[0])
+            self.g = torch.where(self.no_collision_mask, self.g, self.collision(self.f, self.g)[1])
+            for boundary in self.flow.boundaries:
+                self.f = boundary(self.f)
+                self.g = boundary(self.g)
+            for reporter in self.reporters:
+                reporter(self.i, self.i, self.f)
+        end = timer()
+        seconds = end - start
+        num_grid_points = self.lattice.rho(self.f).numel()
+        mlups = num_steps * num_grid_points / 1e6 / seconds
+        return mlups
