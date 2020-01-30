@@ -285,8 +285,154 @@ which is no the case for this matrix.
 #
 
 
-#class D3Q27CumulantTransform(Transform):
-#    def __init__(self, lattice):
-#        raise NotImplementedError
+class D3Q27CentralMomentTransform(Transform):
+    def __init__(self,lattice):
+        #super(D3Q27CentralMomentTransform, self).__init__(
+        #    lattice, None)
+        self.lattice = lattice
 
+    class CentralMomentCoefficients:
+        def __init__(self,e_minus_u,lattice):
+            self.lattice=lattice
+            #Precompute the velocity multiplications up to 6th order
+            self.cx = e_minus_u[:, 0]
+            self.cy = e_minus_u[:, 1]
+            self.cz = e_minus_u[:, 2]
 
+            self.cx_cx = self.lattice.einsum('i,i->i', [e_minus_u[:, 0], e_minus_u[:, 0]])
+            self.cy_cy = self.lattice.einsum('i,i->i', [e_minus_u[:, 0], e_minus_u[:, 0]])
+            self.cz_cz = self.lattice.einsum('i,i->i', [e_minus_u[:, 0], e_minus_u[:, 0]])
+            self.cx_cy = self.lattice.einsum('i,i->i', [e_minus_u[:, 0], e_minus_u[:, 1]])
+            self.cx_cz = self.lattice.einsum('i,i->i', [e_minus_u[:, 0], e_minus_u[:, 2]])
+            self.cy_cz = self.lattice.einsum('i,i->i', [e_minus_u[:, 1], e_minus_u[:, 2]])
+            #Order 3
+            self.cx_cx_cy = self.lattice.einsum('i,i->i', [self.cx_cx, e_minus_u[:, 1]])
+            self.cx_cx_cz = self.lattice.einsum('i,i->i', [self.cx_cx, e_minus_u[:, 2]])
+            self.cy_cy_cz = self.lattice.einsum('i,i->i', [self.cy_cy, e_minus_u[:, 2]])
+            self.cx_cy_cy = self.lattice.einsum('i,i->i', [self.cy_cy, e_minus_u[:, 0]])
+            self.cx_cz_cz = self.lattice.einsum('i,i->i', [self.cz_cz, e_minus_u[:, 0]])
+            self.cy_cz_cz = self.lattice.einsum('i,i->i', [self.cz_cz, e_minus_u[:, 1]])
+            self.cx_cy_cz = self.lattice.einsum('i,i->i', [self.cx_cy, e_minus_u[:, 2]])
+            #Order 4
+            self.cx_cx_cy_cy = self.lattice.einsum('i,i->i', [self.cx_cx_cy, e_minus_u[:, 1]])
+            self.cx_cx_cz_cz = self.lattice.einsum('i,i->i', [self.cx_cx_cz, e_minus_u[:, 2]])
+            self.cy_cy_cz_cz = self.lattice.einsum('i,i->i', [self.cy_cy_cz, e_minus_u[:, 2]])
+            self.cx_cx_cy_cz = self.lattice.einsum('i,i->i', [self.cx_cx_cy, e_minus_u[:, 2]])
+            self.cx_cy_cy_cz = self.lattice.einsum('i,i->i', [self.cx_cy_cy, e_minus_u[:, 2]])
+            self.cx_cy_cz_cz = self.lattice.einsum('i,i->i', [self.cx_cy_cz, e_minus_u[:, 2]])
+            #Order 5
+            self.cx_cx_cy_cy_cz = self.lattice.einsum('i,i->i', [self.cx_cx_cy_cy, e_minus_u[:, 2]])
+            self.cx_cx_cy_cz_cz = self.lattice.einsum('i,i->i', [self.cx_cx_cy_cz, e_minus_u[:, 2]])
+            self.cx_cy_cy_cz_cz = self.lattice.einsum('i,i->i', [self.cx_cy_cy_cz, e_minus_u[:, 2]])
+            #Order 6
+            self.cx_cx_cy_cy_cz_cz = self.lattice.einsum('i,i->i', [self.cx_cx_cy_cy_cz, e_minus_u[:, 2]])
+
+    def transform(self,f):
+        CM = torch.zeros([3, 3, 3, f.shape[1],f.shape[2],f.shape[3]])
+        e_minus_u = self.lattice.einsum('ij,j...->ij...',[self.lattice.e,-self.lattice.u(f)])
+
+        #Calculate the coefficients cx_cx,cx_cy, etc. for the current time step
+        coeff = self.CentralMomentCoefficients(e_minus_u,self.lattice)
+        # Order 0
+        CM[0,0,0] = 0.0
+        # Order 1
+        CM[1, 0, 0] = self.lattice.einsum('i,i...->...', [coeff.cx, f])
+        CM[0, 1, 0] = self.lattice.einsum('i,i...->...', [coeff.cy, f])
+        CM[0, 0, 1] = self.lattice.einsum('i,i...->...', [coeff.cz, f])
+
+        # Order 2
+        CM[2, 0, 0] = self.lattice.einsum('i,i...->...', [coeff.cx_cx, f])
+        CM[0, 2, 0] = self.lattice.einsum('i,i...->...', [coeff.cy_cy, f])
+        CM[0, 0, 2] = self.lattice.einsum('i,i...->...', [coeff.cz_cz, f])
+        CM[1, 1, 0] = self.lattice.einsum('i,i...->...', [coeff.cx_cy, f])
+        CM[1, 0, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cz, f])
+        CM[0, 1, 1] = self.lattice.einsum('i,i...->...', [coeff.cy_cz, f])
+
+        # Order 3
+        CM[2, 1, 0] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy, f])
+        CM[2, 0, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cz, f])
+        CM[0, 2, 1] = self.lattice.einsum('i,i...->...', [coeff.cy_cy_cz, f])
+        CM[1, 2, 0] = self.lattice.einsum('i,i...->...', [coeff.cx_cy_cy, f])
+        CM[1, 0, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cz_cz, f])
+        CM[0, 1, 2] = self.lattice.einsum('i,i...->...', [coeff.cy_cz_cz, f])
+        CM[1, 1, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cy_cz, f])
+
+        # Order 4
+        CM[2, 2, 0] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy_cy, f])
+        CM[2, 0, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cz_cz, f])
+        CM[0, 2, 2] = self.lattice.einsum('i,i...->...', [coeff.cy_cy_cz_cz, f])
+        CM[2, 1, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy_cz, f])
+        CM[1, 2, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cy_cy_cz, f])
+        CM[1, 1, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cy_cz_cz, f])
+
+        # Order 5
+        CM[2, 2, 1] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy_cy_cz, f])
+        CM[2, 1, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy_cz_cz, f])
+        CM[1, 2, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cy_cy_cz_cz, f])
+
+        # Order 6
+        CM[2, 2, 2] = self.lattice.einsum('i,i...->...', [coeff.cx_cx_cy_cy_cz_cz, f])
+
+        CM /= self.lattice.rho(f)
+        return CM
+
+class D3Q27CumulantTransform(Transform):
+    def __init__(self,lattice):
+        self.lattice = lattice
+    def transform(self, f):
+        central_moments = D3Q27CentralMomentTransform(self.lattice)
+        CM = central_moments.transform(f)
+        K = torch.zeros([3, 3, 3, f.shape[1], f.shape[2], f.shape[3]])
+
+        K[0,0,0] = CM[0,0,0]
+        K[1,0,0] = CM[1,0,0]
+        K[0,1,0] = CM[0,1,0]
+        K[0,0,1] = CM[0,0,1]
+        K[2,0,0] = CM[2,0,0]
+        K[0,2,0] = CM[0,2,0]
+        K[0,0,2] = CM[0,0,2]
+        K[1,1,0] = CM[1,1,0]
+        K[1,0,1] = CM[1,0,1]
+        K[0,1,1] = CM[0,1,1]
+        K[2,1,0] = CM[2,1,0]
+        K[2,0,1] = CM[2,0,1]
+        K[0,2,1] = CM[0,2,1]
+        K[1, 2, 0] = CM[1, 2, 0]
+        K[1, 0, 2] = CM[1, 0, 2]
+        K[0, 1, 2] = CM[0, 1, 2]
+        K[1, 1, 1] = CM[1, 1, 1]
+
+        K[2, 2, 0] = CM[2, 2, 0] - CM[2, 0, 0] * CM[0, 2, 0] - 2. * CM[1, 1, 0] * CM[1, 1, 0]
+        K[2, 0, 2] = CM[2, 0, 2] - CM[2, 0, 0] * CM[0, 0, 2] - 2. * CM[1, 0, 1] * CM[1, 0, 1]
+        K[0, 2, 2] = CM[0, 2, 2] - CM[0, 2, 0] * CM[0, 0, 2] - 2. * CM[0, 1, 1] * CM[0, 1, 1]
+        K[2, 1, 1] = CM[2, 1, 1] - CM[2, 0, 0] * CM[0, 1, 1] - 2. * CM[1, 1, 0] * CM[1, 0, 1]
+        K[1, 2, 1] = CM[1, 2, 1] - CM[0, 2, 0] * CM[1, 0, 1] - 2. * CM[1, 1, 0] * CM[0, 1, 1]
+        K[1, 1, 2] = CM[1, 1, 2] - CM[0, 0, 2] * CM[1, 1, 0] - 2. * CM[1, 0, 1] * CM[0, 1, 1]
+
+        K[2, 2, 1] = CM[2, 2, 1] - CM[2, 0, 1] * CM[0, 2, 0] - CM[0, 2, 1] * CM[2, 0, 0] - 2. * CM[2, 1, 0] * CM[
+            0, 1, 1] - 2. * CM[1, 2, 0] * CM[1, 0, 1] - 4. * CM[1, 1, 1] * CM[1, 1, 0]
+        K[2, 1, 2] = CM[2, 1, 2] - CM[2, 1, 0] * CM[0, 0, 2] - CM[0, 1, 2] * CM[2, 0, 0] - 2. * CM[2, 0, 1] * CM[
+            0, 1, 1] - 2. * CM[1, 0, 2] * CM[1, 1, 0] - 4. * CM[1, 1, 1] * CM[1, 0, 1]
+        K[1, 2, 2] = CM[1, 2, 2] - CM[1, 2, 0] * CM[0, 0, 2] - CM[1, 0, 2] * CM[0, 2, 0] - 2. * CM[0, 1, 2] * CM[
+            1, 1, 0] - 2. * CM[0, 2, 1] * CM[1, 0, 1] - 4. * CM[1, 1, 1] * CM[0, 1, 1]
+
+        K[2, 2, 2] = CM[2, 2, 2] - CM[2, 2, 0] * CM[0, 0, 2] - CM[2, 0, 2] * CM[0, 2, 0] - CM[0, 2, 2] * CM[
+            2, 0, 0] - 4. * (CM[2, 1, 1] * CM[0, 1, 1] + CM[1, 2, 1] * CM[1, 0, 1] + CM[1, 1, 2] * CM[1, 1, 0]) - 2. * (
+                                 CM[2, 1, 0] * CM[0, 1, 2] + CM[2, 0, 1] * CM[0, 2, 1] + CM[1, 2, 0] * CM[
+                             1, 0, 2]) - 4. * CM[1, 1, 1] * \
+                     CM[1, 1, 1] + 4. * (
+                             CM[2, 0, 0] * CM[0, 1, 1] * CM[0, 1, 1] + CM[0, 2, 0] * CM[1, 0, 1] * CM[1, 0, 1] + CM[
+                         0, 0, 2] *
+                             CM[1, 1, 0] * CM[1, 1, 0]) + 16. * CM[1, 1, 0] * CM[1, 0, 1] * CM[0, 1, 1] + 2. * CM[
+                         2, 0, 0] * CM[0, 2, 0] * CM[0, 0, 2]
+
+        return K
+
+    def equilibrium(self, K):
+        Keq = torch.zeros_like(K)
+        cs2 = self.lattice.cs * self.lattice.cs
+        Keq[0, 0, 0] = 1.0
+        Keq[2, 0, 0] = cs2
+        Keq[0, 2, 0] = cs2
+        Keq[0, 0, 2] = cs2
+        return Keq
