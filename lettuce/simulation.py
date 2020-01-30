@@ -52,6 +52,7 @@ class Simulation:
             self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f))
             for boundary in self.flow.boundaries:
                 self.f = boundary(self.f)
+                self.g = boundary(self.g)
             for reporter in self.reporters:
                 reporter(self.i, self.i, self.f)
         end = timer()

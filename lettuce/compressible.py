@@ -192,7 +192,7 @@ class SodShockTube:
 
     def initial_solution(self, x):
         #Defines the smoothness of the discontinuity
-        a=30
+        a=1000
         rho_c,rho_d=self.calc_offsets(self.rho_left,1.0)
         T_c,T_d = self.calc_offsets(self.T_left,1.0)
         u = np.array([0 * x[0] + 0 * x[1], 0 * x[0] + 0 * x[1]])
@@ -210,7 +210,7 @@ class SodShockTube:
     @property
     def boundaries(self):
         x, y = self.grid
-        return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice)]
+        return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice),BounceBackBoundary(np.abs(x) > 9*1e-1, self.units.lattice)]
 
 
 class CompressibleLattice(Lattice):
@@ -239,7 +239,6 @@ class BGKCompressibleCollision:
 
 
         geq = (2*C_v-self.lattice.D)*T*feq
-
         f_post= f - 1.0 / self.tau * (f-feq)
         g_post = g - 1.0 / self.tau *(g-geq)
         return f_post,g_post
@@ -288,16 +287,25 @@ class CompressibleSimulation(Simulation):
             self.i += 1
             self.f = self.streaming(self.f)
             self.g = self.streaming(self.g)
+
+
+            f_post, g_post = self.collision(self.f,self.g)
                 # Perform the collision routine everywhere, expect where the no_collision_mask is true
-            self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f,self.g)[0])
-            self.g = torch.where(self.no_collision_mask, self.g, self.collision(self.f, self.g)[1])
+            self.f = torch.where(self.no_collision_mask, self.f, f_post)
+            self.g = torch.where(self.no_collision_mask, self.g, g_post)
             for boundary in self.flow.boundaries:
                 self.f = boundary(self.f)
                 self.g = boundary(self.g)
+
             for reporter in self.reporters:
-                reporter(self.i, self.i, self.f)
+                reporter(self.i, self.i, self.f, self.g)
+
         end = timer()
         seconds = end - start
         num_grid_points = self.lattice.rho(self.f).numel()
         mlups = num_steps * num_grid_points / 1e6 / seconds
         return mlups
+
+
+
+
