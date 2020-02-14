@@ -174,13 +174,14 @@ class HermiteEquilibrium:
 
 
 class SodShockTube:
-    def __init__(self, resolution, lattice, T_left=1.25, rho_left=8):
+    def __init__(self, resolution, lattice, T_left=1.25, rho_left=8, visc=0.001):
+        self.visc = visc
         self.resolution = resolution
         self.T_left = T_left
         self.rho_left = rho_left
         self.units = UnitConversion(
             lattice,
-            reynolds_number=1, mach_number=1,
+            reynolds_number=lattice.cs/(visc*resolution), mach_number=1,
             characteristic_length_lu=resolution, characteristic_length_pu=1,
             characteristic_velocity_pu=1
         )
@@ -192,13 +193,12 @@ class SodShockTube:
 
     def initial_solution(self, x):
         #Defines the smoothness of the discontinuity
-        a=1000
+        a=10000000000
         rho_c,rho_d=self.calc_offsets(self.rho_left,1.0)
         T_c,T_d = self.calc_offsets(self.T_left,1.0)
         u = np.array([0 * x[0] + 0 * x[1], 0 * x[0] + 0 * x[1]])
         rho = np.array([(np.tanh(a*(x[0]-0.5))+rho_c)*rho_d+ x[1] * 0 ])
         T = np.array([(np.tanh(a*(x[0]-0.5))+T_c)*T_d + x[1] * 0])
-
         return rho, u, T
 
     @property
