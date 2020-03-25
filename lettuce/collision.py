@@ -22,6 +22,29 @@ class BGKCollision:
         Si = 0 if self.force is None else self.force.source_term(u)
         return f - 1.0 / self.tau * (f-feq) + Si
 
+class BGKSmagorinskiCollision:
+    def __init__(self, lattice, tau, force=None):
+        self.force = force
+        self.lattice = lattice
+        self.tau = tau
+
+    def __call__(self, f):
+        rho = self.lattice.rho(f)
+        S = self.lattice.shear_tensor(f)
+        tau_eff = self.tau
+        S /= 2.0*rho*tau_eff*self.lattice.cs*self.lattice.cs
+        S = self.lattice.einsum('ab,ab->',[S,S])
+        C = 0.0004
+        nu = (self.tau - 0.5)/3.0
+        nu_t = C * S
+        nu_eff = nu + nu_t
+        tau_eff = nu_eff*3.0+0.5
+        u_eq = 0 if self.force is None else self.force.u_eq(f)
+        u = self.lattice.u(f) + u_eq
+        feq = self.lattice.equilibrium(rho, u)
+        Si = 0 if self.force is None else self.force.source_term(u)
+        return f - 1.0 / tau_eff * (f-feq) + Si
+
 
 class MRTCollision:
     """Multiple relaxation time collision operator

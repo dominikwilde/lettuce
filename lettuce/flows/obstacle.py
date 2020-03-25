@@ -24,7 +24,7 @@ class Obstacle2D(object):
 
     def initial_solution(self, x):
         return np.array([0 * x[0]], dtype=float), np.array(
-            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0],
+            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0+self.units.convert_velocity_to_lu(0.1)],
             dtype=float)
 
     def getMaxU(self, f, lattice):
