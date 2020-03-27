@@ -34,7 +34,7 @@ class BGKSmagorinskiCollision:
         tau_eff = self.tau
         S /= 2.0*rho*tau_eff*self.lattice.cs*self.lattice.cs
         S = self.lattice.einsum('ab,ab->',[S,S])
-        C = 0.0004
+        C = 0.00075
         nu = (self.tau - 0.5)/3.0
         nu_t = C * S
         nu_eff = nu + nu_t
