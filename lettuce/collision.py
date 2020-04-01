@@ -27,23 +27,32 @@ class BGKSmagorinskiCollision:
         self.force = force
         self.lattice = lattice
         self.tau = tau
+        self.iterations = 2
+        self.tau_eff = tau
 
     def __call__(self, f):
         rho = self.lattice.rho(f)
-        S = self.lattice.shear_tensor(f)
-        tau_eff = self.tau
-        S /= 2.0*rho*tau_eff*self.lattice.cs*self.lattice.cs
-        S = self.lattice.einsum('ab,ab->',[S,S])
-        C = 0.00075
-        nu = (self.tau - 0.5)/3.0
-        nu_t = C * S
-        nu_eff = nu + nu_t
-        tau_eff = nu_eff*3.0+0.5
         u_eq = 0 if self.force is None else self.force.u_eq(f)
         u = self.lattice.u(f) + u_eq
         feq = self.lattice.equilibrium(rho, u)
+        S_shear = self.lattice.shear_tensor(f-feq)
+        S_shear /= ( 2.0*rho*self.lattice.cs*self.lattice.cs)
+        self.tau_eff = self.tau
+        nu = (self.tau - 0.5) / 3.0
+        C = 0.2
+        CC = C*C
+        for i in range(self.iterations):
+            S = S_shear / self.tau_eff
+            S = self.lattice.einsum('ab,ab->',[S,S])
+
+            nu_t = CC * S
+            nu_eff = nu + nu_t
+            self.tau_eff = nu_eff*3.0+0.5
+
+
+
         Si = 0 if self.force is None else self.force.source_term(u)
-        return f - 1.0 / tau_eff * (f-feq) + Si
+        return f - 1.0 / self.tau_eff * (f-feq) + Si
 
 
 class MRTCollision:

@@ -24,7 +24,7 @@ class Obstacle2D(object):
 
     def initial_solution(self, x):
         return np.array([0 * x[0]], dtype=float), np.array(
-            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0+self.units.convert_velocity_to_lu(0.1)],
+            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0+self.units.convert_velocity_to_lu(0.3)],
             dtype=float)
 
     def getMaxU(self, f, lattice):
@@ -61,7 +61,7 @@ class Obstacle2D(object):
         x, y = self.grid
         return [EquilibriumBoundaryPU(np.abs(x) < 1e-6, self.units.lattice, self.units, np.array(
             [self.units.characteristic_velocity_pu, self.units.characteristic_velocity_pu * 0.0])),
-                ZeroGradientOutletRight(np.abs(y-1) < 1e-3, self.units.lattice, direction=[1.0, 0.0]),
+                #PressureOutletRight(np.abs(y-1) < 1e-6, self.units.lattice, direction=[1.0, 0.0]),
                 #ZeroGradientOutletBottom(np.abs(x-1) < 1e-3, self.units.lattice, direction=[1.0, 0.0]),
                 #ZeroGradientOutletTop(np.abs(x) < 1e-3, self.units.lattice, direction=[1.0, 0.0]),
                 BounceBackBoundary(self.mask, self.units.lattice)]
@@ -77,6 +77,29 @@ class ZeroGradientOutletRight:
         f[3, -1] = f[3, -2]
         f[6, -1] = f[6, -2]
         f[7, -1] = f[7, -2]
+        return f
+
+class PressureOutletRight:
+    def __init__(self, mask, lattice, direction):
+        self.mask = lattice.convert_to_tensor(mask)
+        self.lattice = lattice
+        self.direction = direction
+
+    def __call__(self, f):
+        rho=1.0
+        #u=(f[0, -1]+f[2, -1]+f[4, -1]+2*(f[1, -1]+f[5, -1]+f[8, -1]))/rho - 1.0
+        #u=self.lattice.u(f)
+        u = torch.zeros([2,1,200], device=self.lattice.device, dtype=self.lattice.dtype)
+        u[0]=(f[0, -1]+f[2, -1]+f[4, -1]+2*(f[1, -1]+f[5, -1]+f[8, -1]))/rho - 1.0
+        exu = self.lattice.einsum("qd,d->q", [self.lattice.e, u])
+        uxu = self.lattice.einsum("d,d->", [u, u])
+        feq = self.lattice.einsum(
+            "q,q->q",
+            [self.lattice.w,
+             rho * ((2 * exu - uxu) / (2 * self.lattice.cs ** 2) + 0.5 * (exu / (self.lattice.cs ** 2)) ** 2 + 1)]
+        )
+        f[:,-1]=feq[:,-1]
+
         return f
 
 class ZeroGradientOutletTop:
