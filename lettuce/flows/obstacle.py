@@ -42,9 +42,9 @@ class Obstacle2D(object):
     def calcEnstrophy(self, f, lattice):
         u0 = lattice.u(f)[0].cpu().numpy()
         u1 = lattice.u(f)[1].cpu().numpy()
-        grad_u0 = np.gradient(u0)
-        grad_u1 = np.gradient(u1)
         dx = self.units.convert_length_to_pu(1.0)
+        grad_u0 = np.gradient(u0,dx)
+        grad_u1 = np.gradient(u1,dx)
         vorticity = np.sum((grad_u0[1] - grad_u1[0]) * (grad_u0[1] - grad_u1[0]))
         vorticity *= dx ** lattice.D
         return  vorticity
