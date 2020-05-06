@@ -24,20 +24,13 @@ class Obstacle2D(object):
 
     def initial_solution(self, x):
         return np.array([0 * x[0]], dtype=float), np.array(
-            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0+self.units.convert_velocity_to_lu(0.3)],
+            [0 * x[0] + self.units.convert_velocity_to_lu(1.0), x[1]*0+self.units.convert_velocity_to_lu(0.05)],
             dtype=float)
 
     def getMaxU(self, f, lattice):
         u0 = (lattice.u(f)[0])
         u1 = (lattice.u(f)[1])
         return torch.max(torch.sqrt(u0*u0+u1*u1))
-
-    def getSheddingFrequency(self, sample):
-        #sample = np.asarray(sample)
-        x = np.arange(sample.size)
-        fourier = np.fft.fft(sample)
-        return x[(fourier == np.min(fourier[2:int(sample.size/2)]))]/ sample.size
-
 
     def calcEnstrophy(self, f, lattice):
         u0 = lattice.u(f)[0].cpu().numpy()
