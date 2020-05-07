@@ -54,17 +54,16 @@ class Obstacle2D(object):
         x, y = self.grid
         return [EquilibriumBoundaryPU(np.abs(x) < 1e-6, self.units.lattice, self.units, np.array(
             [self.units.characteristic_velocity_pu, self.units.characteristic_velocity_pu * 0.0])),
-                #PressureOutletRight(np.abs(y-1) < 1e-6, self.units.lattice, direction=[1.0, 0.0]),
-                #ZeroGradientOutletBottom(np.abs(x-1) < 1e-3, self.units.lattice, direction=[1.0, 0.0]),
-                #ZeroGradientOutletTop(np.abs(x) < 1e-3, self.units.lattice, direction=[1.0, 0.0]),
+                ZeroGradientOutletRight(np.abs(y-1) < 1e-6, self.units.lattice),
+                #ZeroGradientOutletBottom(np.abs(x-1) < 1e-3, self.units.lattice),
+                #ZeroGradientOutletTop(np.abs(x) < 1e-3, self.units.lattice),
                 BounceBackBoundary(self.mask, self.units.lattice)]
 
 
 class ZeroGradientOutletRight:
-    def __init__(self, mask, lattice, direction):
+    def __init__(self, mask, lattice):
         self.mask = lattice.convert_to_tensor(mask)
         self.lattice = lattice
-        self.direction = direction
 
     def __call__(self, f):
         f[3, -1] = f[3, -2]
@@ -72,34 +71,10 @@ class ZeroGradientOutletRight:
         f[7, -1] = f[7, -2]
         return f
 
-class PressureOutletRight:
-    def __init__(self, mask, lattice, direction):
-        self.mask = lattice.convert_to_tensor(mask)
-        self.lattice = lattice
-        self.direction = direction
-
-    def __call__(self, f):
-        rho=1.0
-        #u=(f[0, -1]+f[2, -1]+f[4, -1]+2*(f[1, -1]+f[5, -1]+f[8, -1]))/rho - 1.0
-        #u=self.lattice.u(f)
-        u = torch.zeros([2,1,200], device=self.lattice.device, dtype=self.lattice.dtype)
-        u[0]=(f[0, -1]+f[2, -1]+f[4, -1]+2*(f[1, -1]+f[5, -1]+f[8, -1]))/rho - 1.0
-        exu = self.lattice.einsum("qd,d->q", [self.lattice.e, u])
-        uxu = self.lattice.einsum("d,d->", [u, u])
-        feq = self.lattice.einsum(
-            "q,q->q",
-            [self.lattice.w,
-             rho * ((2 * exu - uxu) / (2 * self.lattice.cs ** 2) + 0.5 * (exu / (self.lattice.cs ** 2)) ** 2 + 1)]
-        )
-        f[:,-1]=feq[:,-1]
-
-        return f
-
 class ZeroGradientOutletTop:
-    def __init__(self, mask, lattice, direction):
+    def __init__(self, mask, lattice):
         self.mask = lattice.convert_to_tensor(mask)
         self.lattice = lattice
-        self.direction = direction
 
     def __call__(self, f):
         f[2, :, 0] = f[2, :, 1]
@@ -108,10 +83,9 @@ class ZeroGradientOutletTop:
         return f
 
 class ZeroGradientOutletBottom:
-    def __init__(self, mask, lattice, direction):
+    def __init__(self, mask, lattice):
         self.mask = lattice.convert_to_tensor(mask)
         self.lattice = lattice
-        self.direction = direction
 
     def __call__(self, f):
         f[4, :, -1] = f[4, :, -2]
@@ -134,19 +108,3 @@ class MaxUReporter:
                 u1 = (self.lattice.u(f)[1])
                 max= torch.max(torch.sqrt(u0*u0+u1*u1)).cpu().numpy()
                 self.out.append([max])
-
-class uSampleReporter:
-    def __init__(self, lattice, flow, interval=50):
-        self.lattice = lattice
-        self.flow = flow
-        self.interval = interval
-        self.out = []
-
-    def __call__(self, i, t, f):
-        if t % self.interval == 0:
-            if t > 1000:
-                x_dim = f.shape[1]
-                y_dim = f.shape[2]
-                u = self.lattice.u(f)[:, int(x_dim / 3), int(y_dim * 0.6)]
-                u_0 = u[0]
-                self.out.append(u_0.cpu().numpy())
