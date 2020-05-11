@@ -92,19 +92,3 @@ class ZeroGradientOutletBottom:
         f[7, :, -1] = f[7, :, -2]
         f[8, :, -1] = f[8, :, -2]
         return f
-
-class MaxUReporter:
-    def __init__(self, lattice, flow, starting_iteration=1000, interval=50):
-        self.lattice = lattice
-        self.flow = flow
-        self.starting_iteration = starting_iteration
-        self.interval = interval
-        self.out = []
-
-    def __call__(self, i, t, f):
-        if t % self.interval == 0:
-            if t > self.starting_iteration:
-                u0 = (self.lattice.u(f)[0])
-                u1 = (self.lattice.u(f)[1])
-                max= torch.max(torch.sqrt(u0*u0+u1*u1)).cpu().numpy()
-                self.out.append([max])
