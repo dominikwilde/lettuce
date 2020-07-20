@@ -17,8 +17,8 @@ class Guo:
         return (1-1/(2*self.tau)) * weemu_eeuF
 
     def u_eq(self, f):
-        index = [Ellipsis] + [None] * self.lattice.D
-        return self.ueq_scaling_factor * self.acceleration[index] / self.lattice.rho(f)
+        #index = [Ellipsis] + [None] * self.lattice.D
+        return self.ueq_scaling_factor * self.acceleration / self.lattice.rho(f)
 
     @property
     def ueq_scaling_factor(self):
@@ -35,8 +35,8 @@ class ShanChen:
         return 0
 
     def u_eq(self, f):
-        index = [Ellipsis] + [None] * self.lattice.D
-        return self.ueq_scaling_factor * self.acceleration[index] / self.lattice.rho(f)
+        #index = [Ellipsis] + [None] * self.lattice.D
+        return self.ueq_scaling_factor * self.acceleration / self.lattice.rho(f)
 
     @property
     def ueq_scaling_factor(self):

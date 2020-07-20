@@ -1,7 +1,7 @@
 rho_0 = 1.0
 
 import torch
-from lettuce import Simulation, Guo, UnitConversion
+from lettuce import Simulation, Guo, UnitConversion, ShanChen
 from timeit import default_timer as timer
 import numpy as np
 
@@ -10,7 +10,7 @@ def psi_function(lattice,f):
     psi[:] = rho_0 * (1.0 - torch.exp(-lattice.rho(f)/rho_0))
     return psi
 
-def shan_chen_forcing_magnitude(lattice,psi,G=1.1):
+def shan_chen_forcing_magnitude(lattice,psi,G=4.7):
     psi_c = torch.einsum('i...,ia->ia...',psi[1:],lattice.e[1:])
 
     F = - psi[0] * G * torch.einsum('i,ia...->a...',lattice.w[1:],psi_c)
@@ -28,8 +28,9 @@ class MultiphaseSimulation(Simulation):
             psi = psi_function(self.lattice,self.f)
             psi = self.streaming(psi)
             F=shan_chen_forcing_magnitude(self.lattice,psi)
-            force = Guo(self.lattice,self.collision.tau,F)
-            self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f,force))
+            force = ShanChen(self.lattice,self.collision.tau,F)
+            self.collision.force=force
+            self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f))
             for boundary in self.flow.boundaries:
                 self.f = boundary(self.f)
             for reporter in self.reporters:
@@ -60,10 +61,8 @@ class SimpleMultiphaseFlow:
         uy = x[0] * 0.0 + x[1] * 0.0
 
         u = np.array([ux, uy])
-        p = np.array([np.zeros(x[0].shape)])
-        if (x[0]>0.25 and x[0]<0.75 and x[1]>0.25 and x[1]<0.75 ):
-            p=3.0
-
+        p = np.array([x[0]*-2.0+x[1]*-2.0])
+        p[0,24:48,24:48]=2.0
         return p, u
 
     @property
