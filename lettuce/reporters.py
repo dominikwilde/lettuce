@@ -103,7 +103,7 @@ class GenericStepReporter:
         self.out = [] if out is None else out
         print('steps    ', self._parameter_name)
 
-    def __call__(self, i, t, f):
+    def __call__(self, i, t, f, g=None):
         if t % self.interval == 0:
             if t > self.starting_iteration:
                 entry = [t, self.parameter_function(i,t,f)]
