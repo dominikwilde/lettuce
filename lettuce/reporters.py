@@ -106,13 +106,18 @@ class GenericStepReporter:
     def __call__(self, i, t, f, g=None):
         if t % self.interval == 0:
             if t > self.starting_iteration:
-                entry = [t, self.parameter_function(i,t,f)]
+                if (g==None):
+                    entry = [t, self.parameter_function(i,t,f)]
+                else:
+                    entry = [t, self.parameter_function(i,t,f,g)]
                 if isinstance(self.out, list):
                     self.out.append(entry)
                 else:
                     print(*entry, file=self.out)
 
     def parameter_function(self,i,t,f):
+        return NotImplemented
+    def parameter_function(self,i,t,f,g):
         return NotImplemented
 
 

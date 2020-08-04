@@ -1,5 +1,5 @@
 import numpy as np
-from lettuce import Stencil, write_vtk, UnitConversion, VTKReporter, torch_gradient,Lattice, Simulation, LettuceException, BounceBackBoundary
+from lettuce import UnitConversion, Stencil, write_vtk, UnitConversion, VTKReporter, torch_gradient,Lattice, Simulation, LettuceException, BounceBackBoundary, GenericStepReporter
 import torch
 from timeit import default_timer as timer
 
@@ -19,6 +19,27 @@ class D2Q37(Stencil):
         16, 15, 18, 17, 20, 19, 22, 21, 24, 23, 26, 25, 28, 27, 30, 29, 32, 31, 34, 33, 36, 35
     ]
 
+class D3V59(Stencil):
+    e = np.array(
+        [[0, 0, 0], [0, 1, 0], [0, 0, 1], [0, 0, -1], [0, -1, 0], [-1, 0, 0], [1, 0, 0], [0, -1, 1], [0, 1, -1],
+         [0, -1, -1], [1, 0, -1], [0, 1, 1], [1, 0, 1], [-1, 0, 1], [-1, 1, 0], [-1, 0, -1], [-1, -1, 0], [1, -1, 0],
+         [1, 1, 0], [-1, 1, -1], [-1, 1, 1], [-1, -1, 1], [-1, -1, -1], [1, -1, 1], [1, 1, -1], [1, 1, 1], [1, -1, -1],
+         [0, 0, 2], [0, 2, 0], [2, 0, 0], [0, 0, -2], [0, -2, 0], [-2, 0, 0], [-2, -2, 0], [-2, 0, 2], [-2, 0, -2],
+         [2, 2, 0], [0, 2, -2], [0, -2, -2], [0, 2, 2], [2, -2, 0], [2, 0, -2], [-2, 2, 0], [2, 0, 2], [0, -2, 2],
+         [-3, 0, 0], [0, 0, 3], [0, 0, -3], [0, -3, 0], [0, 3, 0], [3, 0, 0], [2, 2, 2], [2, -2, -2], [2, -2, 2],
+         [-2, 2, 2], [-2, 2, -2], [-2, -2, 2], [2, 2, -2], [-2, -2, -2]])
+    weights =[]
+    weights+=[9.58789162377528*10**(-2)]*1
+    weights+=[7.31047082129148*10**(-2)]*6
+    weights+=[3.46588971093380*10**(-3)]*12
+    weights+=[3.66108082044515*10**(-2)]*8
+    weights+=[1.59235232232060*10**(-2)]*6
+    weights+=[2.52480845105094*10**(-3)]*12
+    weights+=[7.26968662515159*10**(-5)]*8
+    weights+=[7.65879439346840*10**(-4)]*6
+    w = np.array(weights)
+    cs = 1/1.20288512331026
+
 class D3V107(Stencil):
     e = np.array(
         [[0, 0, 0], [0, 1, 0], [0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0], [0, -1, 0], [1, -1, 0], [-1, 1, 0],
@@ -34,31 +55,19 @@ class D3V107(Stencil):
          [1, -1, 3], [-1, 1, -3], [-1, -1, 3], [-1, 1, 3], [3, -1, 1], [2, -2, -2], [-2, 2, -2], [2, -2, 2],
          [-2, -2, 2], [-2, -2, -2], [-2, 2, 2], [2, 2, 2], [2, 2, -2], [-4, 0, 0], [0, 0, 4], [0, 0, -4], [0, -4, 0],
          [0, 4, 0], [4, 0, 0]])
-    w = np.array([0.07575168609650171, 0.0600912802747447, 0.0600912802747447, 0.0600912802747447, 0.0600912802747447,
-                  0.0600912802747447, 0.0600912802747447, 0.0031360690669953502, 0.0031360690669953502,
-                  0.0031360690669953502, 0.0031360690669953502, 0.0031360690669953502, 0.0031360690669953502,
-                  0.0031360690669953502, 0.0031360690669953502, 0.0031360690669953502, 0.0031360690669953502,
-                  0.0031360690669953502, 0.0031360690669953502, 0.0363392812078012, 0.0363392812078012,
-                  0.0363392812078012, 0.0363392812078012, 0.0363392812078012, 0.0363392812078012, 0.0363392812078012,
-                  0.0363392812078012, 0.013216933273149201, 0.013216933273149201, 0.013216933273149201,
-                  0.013216933273149201, 0.013216933273149201, 0.013216933273149201, 0.0044849285117295,
-                  0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295,
-                  0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295,
-                  0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295,
-                  0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.0044849285117295,
-                  0.0044849285117295, 0.0044849285117295, 0.0044849285117295, 0.00248755775808342, 0.00248755775808342,
-                  0.00248755775808342, 0.00248755775808342, 0.00248755775808342, 0.00248755775808342,
-                  0.00248755775808342, 0.00248755775808342, 0.00248755775808342, 0.00248755775808342,
-                  0.00248755775808342, 0.00248755775808342, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000607432754970149, 0.000607432754970149,
-                  0.000607432754970149, 0.000607432754970149, 0.000464179164402822, 0.000464179164402822,
-                  0.000464179164402822, 0.000464179164402822, 0.000464179164402822, 0.000464179164402822,
-                  0.000464179164402822, 0.000464179164402822, 4.51928894609872e-05, 4.51928894609872e-05,
-                  4.51928894609872e-05, 4.51928894609872e-05, 4.51928894609872e-05, 4.51928894609872e-05])
+    weights = []
+    weights += [7.57516860965017 * 10 ** (-2)] * 1
+    weights += [6.00912802747447 * 10 ** (-2)] * 6
+    weights += [3.13606906699535 * 10 ** (-3)] * 12
+    weights += [3.63392812078012 * 10 ** (-2)] * 8
+    weights += [1.32169332731492 * 10 ** (-2)] * 6
+    weights += [4.48492851172950 * 10 ** (-3)] * 24
+    weights += [2.48755775808342 * 10 ** (-3)] * 12
+    weights += [6.07432754970149 * 10 ** (-4)] * 24
+    weights += [4.64179164402822 * 10 ** (-4)] * 8
+    weights += [4.51928894609872 * 10 ** (-5)] * 6
+    w = np.array(weights)
+
     cs = 1/1.07182071542885
 
 def makeD2Q25HWeights():
@@ -93,6 +102,11 @@ class D2Q25H(Stencil):
     w = makeD2Q25HWeights()
 
     cs = 1
+
+class CompressibleUnitConversion(UnitConversion):
+    @property
+    def characteristic_velocity_lu(self):
+        return self.lattice.stencil.cs * self.mach_number * np.sqrt(self.lattice.gamma)
 
 
 class HermiteEquilibrium:
@@ -253,8 +267,111 @@ class SodShockTube:
         x, y = self.grid
         return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice),BounceBackBoundary(np.abs(x) > 9*1e-1, self.units.lattice)]
 
+class SteadyShock:
+    def __init__(self, resolution, lattice, T_left=1.25, rho_left=8, visc=0.001):
+        self.visc = visc
+        self.resolution = resolution
+        self.T_left = T_left
+        self.rho_left = rho_left
+        self.units = UnitConversion(
+            lattice,
+            reynolds_number=lattice.cs/(visc*resolution), mach_number=1,
+            characteristic_length_lu=resolution, characteristic_length_pu=1,
+            characteristic_velocity_pu=1
+        )
+
+    def calc_offsets(self, left, right):
+        d = (right / 2 - left / 2)
+        c = 2 * (left) / (right - left) + 1
+        return c, d
+
+    def initial_solution(self, x):
+        #Defines the smoothness of the discontinuity
+        a=10000000000
+        rho_c,rho_d=self.calc_offsets(self.rho_left,1.0)
+        T_c,T_d = self.calc_offsets(self.T_left,1.0)
+        u = np.array([0 * x[0] + 0 * x[1], 0 * x[0] + 0 * x[1]])
+        rho = np.array([(np.tanh(a*(x[0]-0.5))+rho_c)*rho_d+ x[1] * 0 ])
+        T = np.array([(np.tanh(a*(x[0]-0.5))+T_c)*T_d + x[1] * 0])
+        return rho, u, T
+
+    @property
+    def grid(self):
+        x = np.linspace(0, 1, num=self.resolution, endpoint=True)
+        y = np.linspace(0, 1, num=5, endpoint=False)
+        return np.meshgrid(x, y, indexing='ij')
+
+    @property
+    def boundaries(self):
+        x, y = self.grid
+        return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice),BounceBackBoundary(np.abs(x) > 9*1e-1, self.units.lattice)]
+
+class CompressibleEnergyReporter(GenericStepReporter):
+    """Reports the kinetic energy """
+    _parameter_name = 'Kinetic energy'
+
+    def parameter_function(self,i,t,f,g):
+        dx = self.flow.units.convert_length_to_pu(1.0)
+        gamma = 1.4
+        C_v = 1. / (gamma - 1)
+        T = self.lattice.temperature(f,g,C_v)
+        rho = self.lattice.rho(f)
+        p = rho*T
+        kinE = self.flow.units.convert_incompressible_energy_to_pu(torch.sum(self.lattice.incompressible_energy(f)*rho ))
+        kinE *= dx ** self.lattice.D
+        return kinE.item()
+
+class MaxMachReporter(GenericStepReporter):
+    """Reports the maximum Mach number"""
+    _parameter_name = 'Max Mach number'
+
+    def parameter_function(self, i, t, f, g):
+        gamma = 1.4
+        C_v = 1. / (gamma - 1)
+        u = self.lattice.u(f)
+        magnitude = u[0]**2 + u[1]**2
+        if(self.lattice.D==3):
+            magnitude += u[2]**2
+        magnitude = torch.sqrt(magnitude)
+
+        T = self.lattice.temperature(f,g,C_v)
+        #a_0 = torch.sqrt(gamma*T)
+        magnitude = torch.max(magnitude/(self.lattice.cs*np.sqrt(1.4))) #/ a_0)
+        return magnitude
+
+
+
+class CompressibleDissipationReporter(GenericStepReporter):
+    """Reports the integral of the vorticity
+
+    Notes
+    -----
+    The function only works for periodic domains
+    """
+    _parameter_name = 'Dissipation'
+
+    def parameter_function(self,i,t,f,g):
+        u0 = self.flow.units.convert_velocity_to_pu(self.lattice.u(f)[0])
+        u1 = self.flow.units.convert_velocity_to_pu(self.lattice.u(f)[1])
+        dx = self.flow.units.convert_length_to_pu(1.0)
+        grad_u0 = torch_gradient(u0, dx=dx, order=6).cpu().numpy()
+        grad_u1 = torch_gradient(u1, dx=dx, order=6).cpu().numpy()
+        dilatation = np.sum(grad_u0[0] + grad_u1[1])
+        vorticity = np.sum((grad_u0[1] - grad_u1[0]) * (grad_u0[1] - grad_u1[0]))
+        if self.lattice.D == 3:
+            u2 = self.flow.units.convert_velocity_to_pu(self.lattice.u(f)[2])
+            grad_u2 = torch_gradient(u2, dx=dx, order=6).cpu().numpy()
+            dilatation += np.sum(grad_u2[2])
+            vorticity += np.sum(
+                (grad_u2[1] - grad_u1[2]) * (grad_u2[1] - grad_u1[2])
+                + ((grad_u0[2] - grad_u2[0]) * (grad_u0[2] - grad_u2[0])))
+        return (vorticity+4./3*dilatation.item()) * dx**self.lattice.D
 
 class CompressibleLattice(Lattice):
+    def __init__(self, stencil, device, dtype=torch.float, gamma = 1.4):
+        super().__init__(stencil,device,dtype)
+        self.gamma = gamma
+
     def temperature(self, f, g, C_v):
         u = self.u(f)
         index = [Ellipsis] + [None] * self.D
@@ -263,6 +380,7 @@ class CompressibleLattice(Lattice):
         f_sum = (self.einsum("i,i->i", [prod, f]))
         fg_sum = (f_sum/(self.cs * self.cs) + g).sum(axis=0)
         return  fg_sum/ (self.rho(f) * 2*C_v)
+
 
 class BGKCompressibleCollision:
     def __init__(self, lattice, tau, gamma):
@@ -277,11 +395,11 @@ class BGKCompressibleCollision:
         u = self.lattice.u(f)
         T = self.lattice.temperature(f,g,C_v)
         feq = self.lattice.equilibrium(rho, u, T)
-
-
+        sunderland_factor = 1.4042 * T**1.5 / (T+0.40417)
+        sunderland_tau = (self.tau -0.5)*sunderland_factor + 0.5
         geq = (2*C_v-self.lattice.D)*T*feq
-        f_post= f - 1.0 / self.tau * (f-feq)
-        g_post = g - 1.0 / self.tau *(g-geq)
+        f_post= f - 1.0 / sunderland_tau * (f-feq)
+        g_post = g - 1.0 / sunderland_tau *(g-geq)
         return f_post,g_post
 
 class CompressibleVTKReporter(VTKReporter):
