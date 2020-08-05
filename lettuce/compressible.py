@@ -268,11 +268,10 @@ class SodShockTube:
         return [BounceBackBoundary(np.abs(x) < 1e-1, self.units.lattice),BounceBackBoundary(np.abs(x) > 9*1e-1, self.units.lattice)]
 
 class SteadyShock:
-    def __init__(self, resolution, lattice, T_left=1.25, rho_left=8, visc=0.001):
+    def __init__(self, resolution, lattice, visc=0.00001):
         self.visc = visc
         self.resolution = resolution
-        self.T_left = T_left
-        self.rho_left = rho_left
+
         self.units = UnitConversion(
             lattice,
             reynolds_number=lattice.cs/(visc*resolution), mach_number=1,
@@ -286,19 +285,16 @@ class SteadyShock:
         return c, d
 
     def initial_solution(self, x):
-        #Defines the smoothness of the discontinuity
-        a=10000000000
-        rho_c,rho_d=self.calc_offsets(self.rho_left,1.0)
-        T_c,T_d = self.calc_offsets(self.T_left,1.0)
+        rho = np.array([1.0 + x[0]*0 +x[1] * 0 ])
+        T = np.array([1.0 + x[0]*0 + x[1]*0])
         u = np.array([0 * x[0] + 0 * x[1], 0 * x[0] + 0 * x[1]])
-        rho = np.array([(np.tanh(a*(x[0]-0.5))+rho_c)*rho_d+ x[1] * 0 ])
-        T = np.array([(np.tanh(a*(x[0]-0.5))+T_c)*T_d + x[1] * 0])
+        rho[0,:,6] = 1.3
         return rho, u, T
 
     @property
     def grid(self):
         x = np.linspace(0, 1, num=self.resolution, endpoint=True)
-        y = np.linspace(0, 1, num=5, endpoint=False)
+        y = np.linspace(0, 1, num=self.resolution, endpoint=False)
         return np.meshgrid(x, y, indexing='ij')
 
     @property
@@ -407,13 +403,14 @@ class CompressibleVTKReporter(VTKReporter):
         if t % self.interval == 0:
             t = self.flow.units.convert_time_to_pu(t)
             u = self.flow.units.convert_velocity_to_pu(self.lattice.u(f))
-            rho = self.lattice.rho(f)
+            rho = self.flow.units.convert_density_lu_to_pressure_pu(self.lattice.rho(f))
+
             T = self.lattice.temperature(f,g,2.5)
             if self.lattice.D == 2:
                 self.point_dict["p"] = self.lattice.convert_to_numpy(rho[0, ..., None])
                 for d in range(self.lattice.D):
                     self.point_dict[f"u{'xyz'[d]}"] = self.lattice.convert_to_numpy(u[d, ..., None])
-                self.point_dict["T"] = self.lattice.convert_to_numpy(T[0, ...])
+                #self.point_dict["T"] = self.lattice.convert_to_numpy(T[0,..., None])
             else:
                 self.point_dict["p"] = self.lattice.convert_to_numpy(rho[0, ...])
                 for d in range(self.lattice.D):
