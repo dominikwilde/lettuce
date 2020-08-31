@@ -67,3 +67,45 @@ class TaylorGreenVortex3D:
     @property
     def boundaries(self):
         return []
+
+class BeltramiFlow3D:
+    def __init__(self, resolution, reynolds_number, mach_number, lattice):
+        self.resolution = resolution
+        self.units = UnitConversion(
+            lattice,
+            reynolds_number=reynolds_number, mach_number=mach_number,
+            characteristic_length_lu=resolution, characteristic_length_pu=2*np.pi,
+            characteristic_velocity_pu=1.40614
+        )
+    def initial_solution(self, x):
+        return self.analytic_solution(x, t=0)
+
+    def analytic_solution(self, x, t=0):
+        prefactor = (4*np.sqrt(2))/(3*np.sqrt(3))
+        nu = self.units.viscosity_pu
+        a = 5/6*np.pi
+        b = 1/6*np.pi
+        u = np.array([
+            prefactor * (np.sin(x[0] - a) * np.cos(x[1] - b) * np.sin(x[2]) - np.cos(x[2] - a) * np.sin(
+                x[0] - b) * np.sin(x[1])) * np.exp(-3 * nu * t),
+            prefactor * (np.sin(x[1] - a) * np.cos(x[2] - b) * np.sin(x[0]) - np.cos(x[0] - a) * np.sin(
+                x[1] - b) * np.sin(x[2])) * np.exp(-3 * nu * t),
+            prefactor * (np.sin(x[2] - a) * np.cos(x[0] - b) * np.sin(x[1]) - np.cos(x[1] - a) * np.sin(
+                x[2] - b) * np.sin(x[0])) * np.exp(-3 * nu * t),
+        ])/1.40614
+        p = +0.13-(u[0]**2+u[1]**2+u[2]**2)/5
+        p = p[None,...]
+        #p=np.array([1 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2] + 2))])
+        return p, u
+
+
+    @property
+    def grid(self):
+        x = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
+        y = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
+        z = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
+        return np.meshgrid(x, y, z)
+
+    @property
+    def boundaries(self):
+        return []
