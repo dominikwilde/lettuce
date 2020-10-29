@@ -439,6 +439,7 @@ class CompressibleSimulation(Simulation):
                              f"Expected {[lattice.D] + list(grid[0].shape)}, "
                              f"but got {list(u.shape)}.")
         u = lattice.convert_to_tensor(flow.units.convert_velocity_to_lu(u))
+        #T = T * self.lattice.stencil.cs**2
         self.f = lattice.equilibrium(lattice.convert_to_tensor(rho), lattice.convert_to_tensor(u),lattice.convert_to_tensor(T))
         gamma = 1.4
         C_v = 1/(gamma - 1)
