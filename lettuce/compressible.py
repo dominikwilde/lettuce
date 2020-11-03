@@ -106,7 +106,7 @@ class D2Q25H(Stencil):
 class CompressibleUnitConversion(UnitConversion):
     @property
     def characteristic_velocity_lu(self):
-        return self.lattice.stencil.cs * self.mach_number * np.sqrt(self.lattice.gamma)
+        return self.lattice.stencil.cs * self.mach_number
 
 
 class HermiteEquilibrium:
@@ -308,11 +308,7 @@ class CompressibleEnergyReporter(GenericStepReporter):
 
     def parameter_function(self,i,t,f,g):
         dx = self.flow.units.convert_length_to_pu(1.0)
-        gamma = 1.4
-        C_v = 1. / (gamma - 1)
-        T = self.lattice.temperature(f,g,C_v)
         rho = self.lattice.rho(f)
-        p = rho*T
         kinE = self.flow.units.convert_incompressible_energy_to_pu(torch.sum(self.lattice.incompressible_energy(f)*rho ))
         kinE *= dx ** self.lattice.D
         return kinE.item()
