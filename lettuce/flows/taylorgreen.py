@@ -53,7 +53,7 @@ class TaylorGreenVortex3D:
             -np.cos(x[0]) * np.sin(x[1]) * np.cos(x[2]),
             np.zeros_like(np.sin(x[0]))
         ])
-        rho = np.array([1.0 + 1 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2]) + 2)])
+        rho = np.array([1.0 + 1.0 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2]) + 2)])
         T = np.ones_like(rho)
         return rho, u, T
 
@@ -62,7 +62,7 @@ class TaylorGreenVortex3D:
         x = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
         y = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
         z = np.linspace(0, 2 * np.pi, num=self.resolution, endpoint=False)
-        return np.meshgrid(x, y, z)
+        return np.meshgrid(x, y, z, indexing='ij')
 
     @property
     def boundaries(self):
