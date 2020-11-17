@@ -13,6 +13,6 @@ flow_by_name = {
     "poiseuille2D": PoiseuilleFlow2D,
     "shear2D": DoublyPeriodicShear2D,
     "couette2D": CouetteFlow2D,
-    "decaying2D": DecayingTurbulence2D
+    "decaying2D": DecayingTurbulence2D,
     "beltrami3D": BeltramiFlow3D
 }

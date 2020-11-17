@@ -91,8 +91,8 @@ class BeltramiFlow3D:
                 x[1] - b) * np.sin(x[2])) * np.exp(-3 * nu * t),
             prefactor * (np.sin(x[2] - a) * np.cos(x[0] - b) * np.sin(x[1]) - np.cos(x[1] - a) * np.sin(
                 x[2] - b) * np.sin(x[0])) * np.exp(-3 * nu * t),
-        ])/1.40614
-        p = +0.13-(u[0]**2+u[1]**2+u[2]**2)/5
+        ])
+        p = 1.0-(u[0]**2+u[1]**2+u[2]**2)/2
         p = p[None,...]
         #p=np.array([1 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2] + 2))])
         return p, u
