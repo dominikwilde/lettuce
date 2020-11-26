@@ -1,6 +1,6 @@
 import numpy as np
 from lettuce.unit import UnitConversion
-from lettuce.boundary import EquilibriumBoundaryPU, BounceBackBoundary, AntiBounceBackOutlet
+from lettuce.boundary import *
 
 
 class Obstacle2D(object):
@@ -43,9 +43,10 @@ class Obstacle2D(object):
     >>> condition = np.sqrt((x-25)**2+(y-25)**2) < 5.0001
     >>> flow.mask[np.where(condition)] = 1
    """
-    def __init__(self, resolution_x, resolution_y, reynolds_number, mach_number, lattice, char_length_lu):
+    def __init__(self, resolution_x, resolution_y, reynolds_number, mach_number, lattice, char_length_lu,area=0):
         self.resolution_x = resolution_x
         self.resolution_y = resolution_y
+        self.area = area
         self.units = UnitConversion(
             lattice,
             reynolds_number=reynolds_number, mach_number=mach_number,
@@ -92,10 +93,11 @@ class Obstacle3D(object):
     """Flow class to simulate the flow around an object (mask) in 3D.
     See documentation for :class:`~Obstacle2D` for details.
     """
-    def __init__(self, resolution_x, resolution_y, resolution_z, reynolds_number, mach_number, lattice, char_length_lu):
+    def __init__(self, resolution_x, resolution_y, resolution_z, reynolds_number, mach_number, lattice, char_length_lu,area=0):
         self.resolution_x = resolution_x
         self.resolution_y = resolution_y
         self.resolution_z = resolution_z
+        self.area = area
         self.units = UnitConversion(
             lattice,
             reynolds_number=reynolds_number, mach_number=mach_number,
@@ -129,7 +131,9 @@ class Obstacle3D(object):
     @property
     def boundaries(self):
         x, y, z = self.grid
-        return [EquilibriumBoundaryPU(np.abs(x) < 1e-6, self.units.lattice, self.units,
-                                      np.array([self.units.characteristic_velocity_pu, 0, 0])),
-                AntiBounceBackOutlet(self.units.lattice, [1, 0, 0]),
-                BounceBackBoundary(self.mask, self.units.lattice)]
+        return [NonEquilibriumExtrapolationInletU(self.units.lattice,
+                                                  [self.units.characteristic_velocity_pu, 0, 0], [1, 0, 0]),
+                np.array([self.units.characteristic_velocity_pu, 0, 0]), AntiBounceBackOutlet(self.units.lattice,
+                                                                                              [1, 0,
+                                                                                               0]), BounceBackBoundary(
+                self.mask, self.units.lattice)]

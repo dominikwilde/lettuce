@@ -8,9 +8,11 @@ The `__call__` function takes f as an argument and returns a torch tensor.
 import torch
 import numpy as np
 from lettuce.util import torch_gradient
+from lettuce.boundary import BounceBackBoundary
 
 
-__all__ = ["Observable", "MaximumVelocity", "IncompressibleKineticEnergy", "Enstrophy", "EnergySpectrum"]
+__all__ = ["Observable", "MaximumVelocity", "IncompressibleKineticEnergy", "Enstrophy", "EnergySpectrum",
+           "DragCoefficient"]
 
 
 class Observable:
@@ -112,3 +114,23 @@ class Mass(Observable):
         if self.mask is not None:
             mass -= (f*self.mask.to(dtype=torch.float)).sum()
         return mass
+
+class DragCoefficient(Observable):
+    """The drag coefficient of obstacle, calculated using momentum exchange method"""
+    def __init__(self, lattice, flow, simulation):
+        self.lattice = lattice
+        self.flow = flow
+        self.boundary = []
+        for boundary in simulation._boundaries:
+            if isinstance(boundary, BounceBackBoundary):
+                boundary.output_force = True
+                self.boundary.append(boundary)
+
+    def __call__(self, f):
+        rho = torch.mean(self.lattice.rho(f[:, 0, ...]))
+        Fw = self.boundary[0].force[0]
+        #f = torch.where(self.mask, f, torch.zeros_like(f))
+        #f[0, ...] = 0
+        #Fw =  self.flow.units.convert_force_to_pu(1**self.lattice.D * self.factor * torch.einsum('ixy, id -> d', [f, self.lattice.e])[0]/1)
+        drag_coefficient = Fw / (0.5 * rho * self.flow.units.characteristic_velocity_lu**2 * self.flow.area)
+        return drag_coefficient
