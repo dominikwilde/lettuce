@@ -2,7 +2,7 @@ import numpy as np
 from lettuce import UnitConversion, Stencil, write_vtk, UnitConversion, VTKReporter, torch_gradient,Lattice, Simulation, LettuceException, BounceBackBoundary, GenericStepReporter
 import torch
 from timeit import default_timer as timer
-
+from copy import deepcopy
 
 class D2Q37(Stencil):
     e = np.array(
@@ -402,6 +402,55 @@ class CompressibleLattice(Lattice):
         fg_sum = (f_sum/(self.cs * self.cs) + g).sum(axis=0)
         return  fg_sum/ (self.rho(f) * 2*C_v)
 
+class BDFSimulation(Simulation):
+    def __init__(self, flow, lattice, collision, streaming):
+        super(BDFSimulation, self).__init__(flow, lattice, collision, streaming)
+        self.f_old = deepcopy(self.f)
+        self.feq_old = deepcopy(self.f)
+
+    def step(self, num_steps):
+        """Take num_steps stream-and-collision steps and return performance in MLUPS."""
+        start = timer()
+        for _ in range(num_steps):
+            self.i += 1
+            self.f = self.streaming(self.f)
+            self.f_old = self.streaming(self.f_old)
+            self.feq_old = self.streaming(self.feq_old)
+            f_copy = deepcopy(self.f)
+            #Perform the collision routine everywhere, expect where the no_collision_mask is true
+            self.f, self.feq_old = self.collision(self.f,self.f_old,self.feq_old,self.i)
+            self.f_old = f_copy
+            for boundary in self.flow.boundaries:
+                self.f = boundary(self.f)
+            for reporter in self.reporters:
+                reporter(self.i, self.i, self.f)
+        end = timer()
+        seconds = end-start
+        num_grid_points = self.lattice.rho(self.f).numel()
+        mlups = num_steps * num_grid_points / 1e6 / seconds
+        return mlups
+
+
+
+class BDF2Collision:
+    def __init__(self, lattice, tau):
+        self.lattice = lattice
+        self.tau = tau
+        self.tau_0 = 9 / 8 * (tau - 0.5) + 3 / 4
+        self.tau_m1 = 9 / 2 * (tau - 0.5) + 3
+        self.counter = 0
+
+    def __call__(self, f, f_old, feq_old, step):
+        rho = self.lattice.rho(f)
+        u = self.lattice.u(f)
+        feq = self.lattice.equilibrium(rho, u)
+        if step <= 1:
+            return f - 1.0 / self.tau * (f - feq), feq
+        else:
+            self.counter+=1
+            return 4/3*f - 1/3*f_old - 1/self.tau_0 * (f - feq) + 1/self.tau_m1*(f_old-feq_old), feq
+
+
 
 class BGKCompressibleCollision:
     def __init__(self, lattice, tau, gamma):
@@ -458,7 +507,7 @@ class CompressibleSimulation(Simulation):
         assert list(rho.shape) == [1] + list(grid[0].shape), \
             LettuceException(f"Wrong dimension of initial pressure field. "
                              f"Expected {[1] + list(grid[0].shape)}, "
-                             f"but got {list(p.shape)}.")
+                             f"but got {list(rho.shape)}.")
         assert list(u.shape) == [lattice.D] + list(grid[0].shape), \
             LettuceException("Wrong dimension of initial velocity field."
                              f"Expected {[lattice.D] + list(grid[0].shape)}, "
@@ -528,5 +577,73 @@ class CompressibleSimulation(Simulation):
 
         feq = self.lattice.equilibrium(rho,u,T)
         self.f = feq + fneq
+
+
+class BGKCompressibleBDFCollision:
+    def __init__(self, lattice, tau, gamma):
+        self.lattice = lattice
+        self.tau = tau
+        self.gamma = gamma
+        self.tau_0 = 9 / 8 * (tau - 0.5) + 3 / 4
+        self.tau_m1 = 9 / 2 * (tau - 0.5) + 3
+
+    def __call__(self, f, f_old,feq_old, g, g_old,step):
+
+        C_v = 1./(self.gamma - 1)
+        rho = self.lattice.rho(f)
+        u = self.lattice.u(f)
+        T = self.lattice.temperature(f,g,C_v)
+        feq = self.lattice.equilibrium(rho, u, T)
+        sunderland_factor = 1.0 #1.4042 * T**1.5 / (T+0.40417)
+        sunderland_tau = (self.tau -0.5)/(T*rho)*sunderland_factor + 0.5
+        geq = (2*C_v-self.lattice.D)*T*feq
+        if step <= 1:
+            f_post = f - 1.0 / sunderland_tau * (f - feq)
+            g_post = g - 1.0 / sunderland_tau * (g - geq)
+            return f_post, feq, g_post
+        else:
+            tau_0 = 9 / 8 * (sunderland_tau - 0.5) + 3 / 4
+            tau_m1 = 9 / 2 * (sunderland_tau - 0.5) + 3
+            f_post =  4 / 3 * f - 1 / 3 * f_old - 1 / tau_0 * (f - feq) + 1 / tau_m1 * (f_old - feq_old)
+            g_post =  4 / 3 * g - 1 / 3 * g_old - 1 / tau_0 * (g - geq) + 1 / tau_m1 * (g_old - (2*C_v-self.lattice.D)*T*feq_old)
+            return f_post, feq, g_post
+
+
+class BDFCompressibleSimulation(CompressibleSimulation):
+    def __init__(self, flow, lattice, collision, streaming):
+        super(BDFCompressibleSimulation, self).__init__(flow, lattice, collision, streaming)
+        self.f_old = deepcopy(self.f)
+        self.feq_old = deepcopy(self.f)
+        self.g_old = deepcopy(self.g)
+
+    def step(self, num_steps):
+        """Take num_steps stream-and-collision steps and return performance in MLUPS."""
+        start = timer()
+        for _ in range(num_steps):
+            self.i += 1
+            self.f = self.streaming(self.f)
+            self.g = self.streaming(self.g)
+
+            self.f_old = self.streaming(self.f_old)
+            self.feq_old = self.streaming(self.feq_old)
+            self.g_old = self.streaming(self.g_old)
+            f_copy = deepcopy(self.f)
+            g_copy = deepcopy(self.g)
+            # Perform the collision routine everywhere, expect where the no_collision_mask is true
+
+            self.f, self.feq_old, self.g = self.collision(self.f, self.f_old, self.feq_old, self.g, self.g_old, self.i)
+            self.f_old = f_copy
+            self.g_old = g_copy
+            for boundary in self.flow.boundaries:
+                self.f = boundary(self.f)
+                self.g = boundary(self.g)
+
+            for reporter in self.reporters:
+                reporter(self.i, self.i, self.f, self.g)
+        end = timer()
+        seconds = end - start
+        num_grid_points = self.lattice.rho(self.f).numel()
+        mlups = num_steps * num_grid_points / 1e6 / seconds
+        return mlups
 
 
