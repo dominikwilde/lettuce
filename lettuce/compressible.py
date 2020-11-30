@@ -597,7 +597,7 @@ class BGKCompressibleBDFCollision:
         sunderland_factor = 1.0 #1.4042 * T**1.5 / (T+0.40417)
         sunderland_tau = (self.tau -0.5)/(T*rho)*sunderland_factor + 0.5
         geq = (2*C_v-self.lattice.D)*T*feq
-        if step ==-1:# 1:
+        if step == 1:
             f_post = f - 1.0 / sunderland_tau * (f - feq)
             g_post = g - 1.0 / sunderland_tau * (g - geq)
             return f_post, feq, g_post, geq_old
@@ -606,12 +606,44 @@ class BGKCompressibleBDFCollision:
             tau_m1 = 9 / 2 * (self.tau - 0.5) + 3
             f_post = 4 / 3 * f - 1 / 3 * f_old - 1 / tau_0 * (f - feq) + 1 / tau_m1 * (f_old - feq_old)
             g_post = 4 / 3 * g - 1 / 3 * g_old - 1 / tau_0 * (g - geq) + 1 / tau_m1 * (g_old - geq_old)
-            return f_post, feq, g_post, geq_old
+            return f_post, feq, g_post, geq
 
 
 class BDFCompressibleSimulation(CompressibleSimulation):
     def __init__(self, flow, lattice, collision, streaming):
-        super(BDFCompressibleSimulation, self).__init__(flow, lattice, collision, streaming)
+        self.flow = flow
+        self.lattice = lattice
+        self.collision = collision
+        self.streaming = streaming
+        self.i = 0
+        self.lattice.equilibrium=HermiteEquilibrium(lattice)
+        self.reporters = []
+
+        grid = flow.grid
+        rho, u, T = flow.initial_solution(grid)
+        assert list(rho.shape) == [1] + list(grid[0].shape), \
+            LettuceException(f"Wrong dimension of initial pressure field. "
+                             f"Expected {[1] + list(grid[0].shape)}, "
+                             f"but got {list(rho.shape)}.")
+        assert list(u.shape) == [lattice.D] + list(grid[0].shape), \
+            LettuceException("Wrong dimension of initial velocity field."
+                             f"Expected {[lattice.D] + list(grid[0].shape)}, "
+                             f"but got {list(u.shape)}.")
+        u = lattice.convert_to_tensor(flow.units.convert_velocity_to_lu(u))
+        #T = T * self.lattice.stencil.cs**2
+        self.f = lattice.equilibrium(lattice.convert_to_tensor(rho), lattice.convert_to_tensor(u),lattice.convert_to_tensor(T))
+        gamma = 1.4
+        C_v = 1/(gamma - 1)
+        self.g = (2*C_v-lattice.D)*lattice.convert_to_tensor(T)*self.f
+
+
+        # Define a mask, where the collision shall not be applied
+        x = flow.grid
+        self.no_collision_mask = np.zeros_like(x[0], dtype=bool)
+        self.no_collision_mask = lattice.convert_to_tensor(self.no_collision_mask)
+        for boundary in self.flow.boundaries:
+            if boundary.__class__.__name__ == "BounceBackBoundary":
+                self.no_collision_mask = boundary.mask | self.no_collision_mask
         self.f_old = deepcopy(self.f)
         self.feq_old = deepcopy(self.f)
         self.g_old = deepcopy(self.g)
