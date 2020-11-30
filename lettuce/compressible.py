@@ -587,7 +587,7 @@ class BGKCompressibleBDFCollision:
         self.tau_0 = 9 / 8 * (tau - 0.5) + 3 / 4
         self.tau_m1 = 9 / 2 * (tau - 0.5) + 3
 
-    def __call__(self, f, f_old,feq_old, g, g_old,step):
+    def __call__(self, f, f_old,feq_old, g, g_old, geq_old, step):
 
         C_v = 1./(self.gamma - 1)
         rho = self.lattice.rho(f)
@@ -597,16 +597,16 @@ class BGKCompressibleBDFCollision:
         sunderland_factor = 1.0 #1.4042 * T**1.5 / (T+0.40417)
         sunderland_tau = (self.tau -0.5)/(T*rho)*sunderland_factor + 0.5
         geq = (2*C_v-self.lattice.D)*T*feq
-        if step <= 1:
+        if step ==-1:# 1:
             f_post = f - 1.0 / sunderland_tau * (f - feq)
             g_post = g - 1.0 / sunderland_tau * (g - geq)
-            return f_post, feq, g_post
+            return f_post, feq, g_post, geq_old
         else:
-            tau_0 = 9 / 8 * (sunderland_tau - 0.5) + 3 / 4
-            tau_m1 = 9 / 2 * (sunderland_tau - 0.5) + 3
-            f_post =  4 / 3 * f - 1 / 3 * f_old - 1 / tau_0 * (f - feq) + 1 / tau_m1 * (f_old - feq_old)
-            g_post =  4 / 3 * g - 1 / 3 * g_old - 1 / tau_0 * (g - geq) + 1 / tau_m1 * (g_old - (2*C_v-self.lattice.D)*T*feq_old)
-            return f_post, feq, g_post
+            tau_0 = 9 / 8 * (self.tau - 0.5) + 3 / 4
+            tau_m1 = 9 / 2 * (self.tau - 0.5) + 3
+            f_post = 4 / 3 * f - 1 / 3 * f_old - 1 / tau_0 * (f - feq) + 1 / tau_m1 * (f_old - feq_old)
+            g_post = 4 / 3 * g - 1 / 3 * g_old - 1 / tau_0 * (g - geq) + 1 / tau_m1 * (g_old - geq_old)
+            return f_post, feq, g_post, geq_old
 
 
 class BDFCompressibleSimulation(CompressibleSimulation):
@@ -615,6 +615,7 @@ class BDFCompressibleSimulation(CompressibleSimulation):
         self.f_old = deepcopy(self.f)
         self.feq_old = deepcopy(self.f)
         self.g_old = deepcopy(self.g)
+        self.geq_old = deepcopy(self.g)
 
     def step(self, num_steps):
         """Take num_steps stream-and-collision steps and return performance in MLUPS."""
@@ -627,11 +628,12 @@ class BDFCompressibleSimulation(CompressibleSimulation):
             self.f_old = self.streaming(self.f_old)
             self.feq_old = self.streaming(self.feq_old)
             self.g_old = self.streaming(self.g_old)
+            self.geq_old = self.streaming(self.geq_old)
             f_copy = deepcopy(self.f)
             g_copy = deepcopy(self.g)
             # Perform the collision routine everywhere, expect where the no_collision_mask is true
 
-            self.f, self.feq_old, self.g = self.collision(self.f, self.f_old, self.feq_old, self.g, self.g_old, self.i)
+            self.f, self.feq_old, self.g, self.geq_old = self.collision(self.f, self.f_old, self.feq_old, self.g, self.g_old, self.geq_old, self.i)
             self.f_old = f_copy
             self.g_old = g_copy
             for boundary in self.flow.boundaries:
