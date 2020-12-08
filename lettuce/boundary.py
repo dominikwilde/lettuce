@@ -94,12 +94,12 @@ class EquilibriumBoundaryPU:
         self.velocity = lattice.convert_to_tensor(velocity)
         self.pressure = lattice.convert_to_tensor(pressure)
 
-    def __call__(self, f):
+    def __call__(self, f, index=...):
         rho = self.units.convert_pressure_pu_to_density_lu(self.pressure)
         u = self.units.convert_velocity_to_lu(self.velocity)
         feq = self.lattice.equilibrium(rho, u)
         feq = self.lattice.einsum("q,q->q", [feq, torch.ones_like(f)])
-        f = torch.where(self.mask, feq, f)
+        f = torch.where(self.mask[index], feq, f)
         return f
 
 
@@ -148,6 +148,7 @@ class AntiBounceBackOutlet:
     def __call__(self, f):
         u = self.lattice.u(f)
         u_w = u[[slice(None)] + self.index] + 0.5 * (u[[slice(None)] + self.index] - u[[slice(None)] + self.neighbor])
+        #u_w[0][u_w[0]<0] = 0.0
         f[[np.array(self.lattice.stencil.opposite)[self.velocities]] + self.index] = (
             - f[[self.velocities] + self.index] + self.w * self.lattice.rho(f)[[slice(None)] + self.index] *
             (2 + torch.einsum(self.dims, self.lattice.e[self.velocities], u_w) ** 2 / self.lattice.cs ** 4

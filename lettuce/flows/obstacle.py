@@ -66,8 +66,9 @@ class Obstacle2D(object):
 
     def initial_solution(self, x):
         p = np.zeros_like(x[0], dtype=float)[None, ...]
-        u_char = np.array([self.units.characteristic_velocity_pu, 0.0])[..., None, None]
+        u_char = np.array([self.units.characteristic_velocity_pu,0.05*self.units.characteristic_velocity_pu])[..., None, None]
         u = (1 - self.mask.astype(np.float)) * u_char
+        u[1] += np.sin(x[1]/x[1].shape[1]*2*np.pi)*1 * self.units.characteristic_velocity_pu #* (0.5-np.random.rand(x[0].shape[0],x[0].shape[1]))
         return p, u
 
     @property
@@ -81,10 +82,12 @@ class Obstacle2D(object):
         x, y = self.grid
         return [
             EquilibriumBoundaryPU(
-                np.abs(x) < 1e-6, self.units.lattice, self.units,
+                np.abs(x) >= (self.resolution_x-1)/self.units.characteristic_length_lu, self.units.lattice, self.units,
                 np.array([self.units.characteristic_velocity_pu, 0])
             ),
-            AntiBounceBackOutlet(self.units.lattice, [1, 0]),
+
+            AntiBounceBackOutlet(self.units.lattice,[1,0]),
+            NonEquilibriumExtrapolationInletU(self.units.lattice, [self.units.characteristic_velocity_lu, 0], [-1, 0]),
             BounceBackBoundary(self.mask, self.units.lattice)
         ]
 

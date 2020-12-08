@@ -14,11 +14,11 @@ class QuadraticEquilibrium(Equilibrium):
 
     def __call__(self, rho, u, *args):
         exu = torch.tensordot(self.lattice.e, u, dims=1)
-        uxu = self.lattice.einsum("d,d->", [u, u])
-        feq = self.lattice.einsum(
-            "q,q->q",
-            [self.lattice.w,
-             rho * ((2 * exu - uxu) / (2 * self.lattice.cs ** 2) + 0.5 * (exu / (self.lattice.cs ** 2)) ** 2 + 1)]
+        uxu = torch.einsum("d...,d...->...", u, u)
+        feq = torch.einsum(
+            "q,q...->q...",
+            self.lattice.w,
+             rho * ((2 * exu - uxu) / (2 * self.lattice.cs ** 2) + 0.5 * (exu / (self.lattice.cs ** 2)) ** 2 + 1)
         )
         return feq
 

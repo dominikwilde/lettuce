@@ -21,7 +21,8 @@ class Observable:
         self.flow = flow
 
     def __call__(self, f):
-        raise NotImplementedError
+        return torch.Tensor(0)
+        #raise NotImplementedError
 
 
 class MaximumVelocity(Observable):
@@ -127,7 +128,7 @@ class DragCoefficient(Observable):
                 self.boundary.append(boundary)
 
     def __call__(self, f):
-        rho = torch.mean(self.lattice.rho(f[:, 0, ...]))
+        rho =  torch.mean(self.lattice.rho(f[:, 0, ...]))
         Fw = self.boundary[0].force[0]
         #f = torch.where(self.mask, f, torch.zeros_like(f))
         #f[0, ...] = 0
