@@ -149,3 +149,62 @@ class EquilibriumOutletP(AntiBounceBackOutlet):
         no_collision_mask = torch.zeros(size=f_shape[1:], dtype=torch.bool, device=self.lattice.device)
         no_collision_mask[self.index] = 1
         return no_collision_mask
+
+
+class NonEquilibriumExtrapolationInletU(object):
+    """ Guo's boundary condition
+    use on post stream populations!!!!!
+    https://www.researchgate.net/publication/230963379_Non-equilibrium_extrapolation_method_for_velocity_and_boundary_conditions_in_the_lattice_Boltzmann_method
+    or LBM book page 189
+        """
+
+    def __init__(self, lattice, u_w, direction):
+        assert (isinstance(direction, list) and len(direction) in [1,2,3] and ((np.abs(sum(direction)) == 1) and (np.max(np.abs(direction)) == 1) and (1 in direction) ^ (-1 in direction))), \
+            LettuceException("Wrong direction. Expected list of length 1, 2 or 3 with all entrys 0 except one 1 or -1, "
+                                f"but got {type(direction)} of size {len(direction)} and entrys {direction}.")
+        self.direction = np.array(direction)
+        self.lattice = lattice
+        self.u_w = self.lattice.convert_to_tensor(u_w)
+
+        # select velocities to be bounced (the ones pointing in "direction")
+        self.velocities_out = np.concatenate(np.argwhere(np.matmul(self.lattice.stencil.e, self.direction) > 1 - 1e-6), axis=0)
+        # select velocities to be replaced (the ones pointing against "direction")
+        self.velocities_in = np.concatenate(np.argwhere(np.matmul(self.lattice.stencil.e, self.direction) < -1 + 1e-6), axis=0)
+
+        # build indices of u and f that determine the side of the domain
+        self.index = []
+        self.neighbor = []
+        for i in self.direction:
+            if i == 0:
+                self.index.append(slice(None))
+                self.neighbor.append(slice(None))
+            if i == 1:
+                self.index.append(-1)
+                self.neighbor.append(-2)
+            if i == -1:
+                self.index.append(0)
+                self.neighbor.append(1)
+        self.rho_old = 1.0
+
+    def __call__(self, f):
+        Tc = 10
+        here = [slice(None)] + self.index
+        other = [slice(None)] + self.neighbor
+        u = self.lattice.convert_to_tensor(self.lattice.u(f[other]))
+        rho = self.lattice.convert_to_tensor(self.lattice.rho(f[other]))
+        list = []
+        for _ in u.shape: list += [1]
+        list[0] = len(self.u_w)
+        u_w = self.u_w.view(list).expand_as(u)
+        rho_self = 1 / (1 - u_w[np.argwhere(self.direction != 0).item()] / self.lattice.e[self.velocities_in[0], np.argwhere(self.direction != 0).item()]) * (
+            torch.sum(f[[np.setdiff1d(np.arange(self.lattice.Q), [self.velocities_in, self.velocities_out])] + self.index] + 2 * f[[self.velocities_out] + self.index], dim=0))
+        # desnity filtering as proposed by https://www.researchgate.net/publication/257389374_Computational_Gas_Dynamics_with_the_Lattice_Boltzmann_Method_Preconditioning_and_Boundary_Conditions
+        rho_w = (rho_self + Tc * self.rho_old) / (1+Tc)
+        self.rho_old = rho_w
+        f[here] = self.lattice.equilibrium(rho_w, u_w) + (f[other] - self.lattice.equilibrium(rho, u))
+        return f
+
+    #def make_no_stream_mask(self, f_shape):
+    #    no_stream_mask = torch.zeros(size=f_shape, dtype=torch.bool, device=self.lattice.device)
+    #    no_stream_mask[[self.velocities_in] + self.index] = 1
+    #    return no_stream_mask
