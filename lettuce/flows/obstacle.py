@@ -117,6 +117,7 @@ class Obstacle3D(object):
         p = np.zeros_like(x[0], dtype=float)[None, ...]
         u_char = np.array([self.units.characteristic_velocity_pu, 0.0, 0.0])[..., None, None, None]
         u = (1 - self.mask.astype(np.float)) * u_char
+        u[2] += np.sin(x[2]/x[2].shape[1]*2*np.pi)* self.units.characteristic_velocity_pu #* (0.5-np.random.rand(x[0].shape[0],x[0].shape[1]))
         return p, u
 
     @property
