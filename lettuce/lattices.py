@@ -59,7 +59,7 @@ class Lattice:
 
     def j(self, f):
         """momentum"""
-        return self.einsum("qd,q->d", [self.e, f])
+        return torch.einsum("qd,q...->d...", self.e, f)
 
     def u(self, f):
         """velocity"""
