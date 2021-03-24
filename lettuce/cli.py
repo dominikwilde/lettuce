@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 
-"""Console script for lettuce."""
+"""Console script for lettuce.
+To get help for terminal commands, open a console and type:
+
+>>>  lettuce --help
+
+"""
 
 import sys
 import cProfile
@@ -10,8 +15,8 @@ import click
 import torch
 import numpy as np
 
-import lettuce
 from lettuce import BGKCollision, StandardStreaming, Lattice, D2Q9
+from lettuce import __version__ as lettuce_version
 
 from lettuce import TaylorGreenVortex2D, Simulation, ErrorReporter, VTKReporter
 from lettuce.flows import flow_by_name
@@ -19,11 +24,11 @@ from lettuce.force import Guo
 
 
 @click.group()
-@click.version_option(version=lettuce.__version__)
+@click.version_option(version=lettuce_version)
 @click.option("--cuda/--no-cuda", default=True, help="Use cuda (default=True).")
 @click.option("-i", "--gpu-id", type=int, default=0, help="Device ID of the GPU (default=0).")
 @click.option("-p", "--precision", type=click.Choice(["half", "single", "double"]), default="double",
-              help="Numerical Precision; 16, 32, or 64 bit per float (default=single).")
+              help="Numerical Precision; 16, 32, or 64 bit per float (default=double).")
 @click.pass_context  # pass parameters to sub-commands
 def main(ctx, cuda, gpu_id, precision):
     """Pytorch-accelerated Lattice Boltzmann Solver
@@ -55,13 +60,14 @@ def benchmark(ctx, steps, resolution, profile_out, flow, vtk_out):
     """Run a short simulation and print performance in MLUPS.
     """
     # start profiling
-    profile = cProfile.Profile()
-    profile.enable()
+    if profile_out:
+        profile = cProfile.Profile()
+        profile.enable()
 
     # setup and run simulation
     device, dtype = ctx.obj['device'], ctx.obj['dtype']
-    lattice = Lattice(D2Q9, device, dtype)
-    flow_class = flow_by_name[flow]
+    flow_class, stencil = flow_by_name[flow]
+    lattice = Lattice(stencil, device, dtype)
     flow = flow_class(resolution=resolution, reynolds_number=1, mach_number=0.05, lattice=lattice)
     force = Guo(
         lattice,
@@ -76,8 +82,8 @@ def benchmark(ctx, steps, resolution, profile_out, flow, vtk_out):
     mlups = simulation.step(num_steps=steps)
 
     # write profiling output
-    profile.disable()
     if profile_out:
+        profile.disable()
         stats = pstats.Stats(profile)
         stats.sort_stats('cumulative')
         stats.print_stats()
@@ -90,8 +96,9 @@ def benchmark(ctx, steps, resolution, profile_out, flow, vtk_out):
 
 
 @main.command()
+@click.option("--init_f_neq/--no-initfneq", default=False, help="Initialize fNeq via finite differences")
 @click.pass_context
-def convergence(ctx):
+def convergence(ctx,init_f_neq):
     """Use Taylor Green 2D for convergence test in diffusive scaling."""
     device, dtype = ctx.obj['device'], ctx.obj['dtype']
     lattice = Lattice(D2Q9, device, dtype)
@@ -108,9 +115,11 @@ def convergence(ctx):
         collision = BGKCollision(lattice, tau=flow.units.relaxation_parameter_lu)
         streaming = StandardStreaming(lattice)
         simulation = Simulation(flow=flow, lattice=lattice, collision=collision, streaming=streaming)
+        if(init_f_neq):
+            simulation.initialize_f_neq()
         error_reporter = ErrorReporter(lattice, flow, interval=1, out=None)
         simulation.reporters.append(error_reporter)
-        for i in range(10*resolution):
+        for _ in range(10*resolution):
             simulation.step(1)
         error_u, error_p = np.mean(np.abs(error_reporter.out), axis=0).tolist()
         factor_u = 0 if error_u_old is None else error_u_old / error_u
@@ -128,6 +137,6 @@ def convergence(ctx):
     else:
         return 0
 
+
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
-

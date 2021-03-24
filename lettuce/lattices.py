@@ -16,6 +16,9 @@ from lettuce.util import LettuceException
 from lettuce.equilibrium import QuadraticEquilibrium
 
 
+__all__ = ["Lattice"]
+
+
 class Lattice:
 
     def __init__(self, stencil, device, dtype=torch.float):
@@ -41,8 +44,8 @@ class Lattice:
     def convert_to_tensor(self, array):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            if isinstance(array, np.ndarray) and array.dtype in [np.bool, np.uint8]:
-                return torch.tensor(array, device=self.device, dtype=torch.uint8)  # that's how torch stores its masks
+            if isinstance(array, np.ndarray) and array.dtype in [np.bool, np.uint8] or isinstance(array, torch.BoolTensor):
+                return torch.tensor(array, device=self.device, dtype=torch.bool)
             else:
                 return torch.tensor(array, device=self.device, dtype=self.dtype)
 
@@ -62,9 +65,9 @@ class Lattice:
         """velocity"""
         return self.j(f) / self.rho(f)
 
-    def energy(self, f):
-        """kinetic energy"""
-        return self.einsum("d,d->", [self.u(f),self.u(f)])
+    def incompressible_energy(self, f):
+        """incompressible kinetic energy"""
+        return 0.5*self.einsum("d,d->", [self.u(f), self.u(f)])
 
     def entropy(self, f):
         """entropy according to the H-theorem"""
@@ -106,3 +109,4 @@ class Lattice:
                 raise LettuceException("Bad dimension.")
         equation = ",".join(inputs) + "->" + output
         return torch.einsum(equation, fields, **kwargs)
+
