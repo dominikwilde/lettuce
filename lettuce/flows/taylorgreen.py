@@ -4,6 +4,7 @@ Taylor-Green vortex in 2D and 3D.
 
 import numpy as np
 
+import lettuce
 from lettuce.unit import UnitConversion
 
 
@@ -22,7 +23,8 @@ class TaylorGreenVortex2D:
         u = np.array([np.cos(x[0]) * np.sin(x[1]) * np.exp(-2 * nu * t),
                       -np.sin(x[0]) * np.cos(x[1]) * np.exp(-2 * nu * t)])
         p = -np.array([0.25 * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * np.exp(-4 * nu * t)])
-        return p, u
+        rho_prime = np.array([0 * x[0]])
+        return p, u, rho_prime
 
     def initial_solution(self, x):
         return self.analytic_solution(x, t=0)
@@ -55,7 +57,9 @@ class TaylorGreenVortex3D:
             np.zeros_like(np.sin(x[0]))
         ])
         p = np.array([1 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2]) + 2)])
-        return p, u
+        rho_prime = 20*((x[2])/(2*np.pi)-0.5)
+
+        return p, u, rho_prime
 
     @property
     def grid(self):
@@ -66,4 +70,5 @@ class TaylorGreenVortex3D:
 
     @property
     def boundaries(self):
-        return []
+        x,y,z, = self.grid
+        return [ ]

@@ -37,7 +37,7 @@ class ShanChen:
 
     def u_eq(self, f):
         index = [Ellipsis] + [None] * self.lattice.D
-        return self.ueq_scaling_factor * self.acceleration[index] / self.lattice.rho(f)
+        return self.ueq_scaling_factor * self.acceleration / self.lattice.rho(f)
 
     @property
     def ueq_scaling_factor(self):

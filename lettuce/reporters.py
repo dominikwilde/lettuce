@@ -49,10 +49,13 @@ class VTKReporter:
             os.mkdir(directory)
         self.point_dict = dict()
 
-    def __call__(self, i, t, f):
+    def __call__(self, i, t, f, g=None):
         if i % self.interval == 0:
             u = self.flow.units.convert_velocity_to_pu(self.lattice.u(f))
             p = self.flow.units.convert_density_lu_to_pressure_pu(self.lattice.rho(f))
+
+
+
             if self.lattice.D == 2:
                 self.point_dict["p"] = self.lattice.convert_to_numpy(p[0, ..., None])
                 for d in range(self.lattice.D):
@@ -61,6 +64,9 @@ class VTKReporter:
                 self.point_dict["p"] = self.lattice.convert_to_numpy(p[0, ...])
                 for d in range(self.lattice.D):
                     self.point_dict[f"u{'xyz'[d]}"] = self.lattice.convert_to_numpy(u[d, ...])
+                if g is not None:
+                    rho_prime = self.flow.units.convert_density_lu_to_pressure_pu(self.lattice.rho(g))
+                    self.point_dict["rho_prime"] = self.lattice.convert_to_numpy(rho_prime[0, ...])
             write_vtk(self.point_dict, i, self.filename_base)
 
     def output_mask(self, no_collision_mask):
@@ -132,7 +138,7 @@ class ObservableReporter:
         self._parameter_name = observable.__class__.__name__
         print('steps    ', 'time    ', self._parameter_name)
 
-    def __call__(self, i, t, f):
+    def __call__(self, i, t, f,g=None):
         if i % self.interval == 0:
             observed = self.observable.lattice.convert_to_numpy(self.observable(f))
             assert len(observed.shape) < 2

@@ -32,7 +32,7 @@ class Simulation:
         self.i = 0
 
         grid = flow.grid
-        p, u = flow.initial_solution(grid)
+        p, u, rho_prime = flow.initial_solution(grid)
         assert list(p.shape) == [1] + list(grid[0].shape), \
             LettuceException(f"Wrong dimension of initial pressure field. "
                              f"Expected {[1] + list(grid[0].shape)}, "
@@ -43,8 +43,9 @@ class Simulation:
                              f"but got {list(u.shape)}.")
         u = lattice.convert_to_tensor(flow.units.convert_velocity_to_lu(u))
         rho = lattice.convert_to_tensor(flow.units.convert_pressure_pu_to_density_lu(p))
+        rho_prime = lattice.convert_to_tensor(flow.units.convert_pressure_pu_to_density_lu(rho_prime))
         self.f = lattice.equilibrium(rho, lattice.convert_to_tensor(u))
-
+        self.g = lattice.equilibrium(rho_prime, lattice.convert_to_tensor(u))
         self.reporters = []
 
         # Define masks, where the collision or streaming are not applied
@@ -70,10 +71,14 @@ class Simulation:
         for _ in range(num_steps):
             self.i += 1
             self.f = self.streaming(self.f)
+            self.g = self.streaming(self.g)
             # Perform the collision routine everywhere, expect where the no_collision_mask is true
-            self.f = torch.where(self.no_collision_mask, self.f, self.collision(self.f))
+            fg = self.collision(self.f, self.g)
+            self.f = torch.where(self.no_collision_mask, self.f, fg[0])
+            self.g = torch.where(self.no_collision_mask, self.g, fg[1])
             for boundary in self._boundaries:
                 self.f = boundary(self.f)
+                self.g = boundary(self.g)
             self._report()
         end = timer()
         seconds = end - start
@@ -83,7 +88,10 @@ class Simulation:
 
     def _report(self):
         for reporter in self.reporters:
-            reporter(self.i, self.flow.units.convert_time_to_pu(self.i), self.f)
+            if self.g is None:
+                reporter(self.i, self.flow.units.convert_time_to_pu(self.i), self.f)
+            else:
+                reporter(self.i, self.flow.units.convert_time_to_pu(self.i), self.f, self.g)
 
     def initialize(self, max_num_steps=500, tol_pressure=0.001):
         """Iterative initialization to get moments consistent with the initial velocity.

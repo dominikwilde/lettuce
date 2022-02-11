@@ -12,7 +12,9 @@ resolution = 80  # resolution of the lattice, low resolution leads to unstable s
 flow = lt.TaylorGreenVortex3D(resolution, 1600, 0.1, lattice)
 
 # select collision model - try also KBCCollision or RegularizedCollision
-collision = lt.BGKCollision(lattice, tau=flow.units.relaxation_parameter_lu)
+force = lt.ShanChen(lattice,flow.units.relaxation_parameter_lu,[0,0,0.00])
+G = 1
+collision = lt.BGKCollision(lattice, flow.units.relaxation_parameter_lu, force=force, factor=flow.units.convert_acceleration_to_lu(G))
 streaming = lt.StandardStreaming(lattice)
 simulation = lt.Simulation(flow, lattice, collision, streaming)
 simulation.initialize_f_neq()  # initialize non-conserved moments
@@ -22,9 +24,9 @@ simulation.initialize_f_neq()  # initialize non-conserved moments
 kinE_reporter = lt.EnergyReporter(lattice, flow, interval=1, out=None)
 simulation.reporters.append(kinE_reporter)
 # Output: separate VTK-file with ux,uy,uz and p for every time step in ../data
-VTKreport = lt.VTKReporter(lattice, flow, interval=25)
+VTKreport = lt.VTKReporter(lattice, flow, interval=100, filename_base='./data/output_{}'.format(G))
 simulation.reporters.append(VTKreport)
-
+print(collision.factor)
 # ---------- Simulate until time = 10 (PU) -------------
 print("Simulating", int(simulation.flow.units.convert_time_to_lu(10)), "steps! Maybe drink some water in the meantime.")
 # runs simulation, but also returns overall performance in MLUPS (million lattice units per second)
