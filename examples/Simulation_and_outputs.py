@@ -8,13 +8,16 @@ print("start")
 # ---------- Set up simulation -------------
 device = torch.device("cuda:0")  # replace with device("cpu"), if no GPU is available
 lattice = lt.Lattice(lt.D3Q27, device=device, dtype=torch.float32)  # single precision - float64 for double precision
-resolution = 80  # resolution of the lattice, low resolution leads to unstable speeds somewhen after 10 (PU)
+resolution = 128  # resolution of the lattice, low resolution leads to unstable speeds somewhen after 10 (PU)
 flow = lt.TaylorGreenVortex3D(resolution, 1600, 0.1, lattice)
 
 # select collision model - try also KBCCollision or RegularizedCollision
-force = lt.ShanChen(lattice,flow.units.relaxation_parameter_lu,[0,0,0.00])
-G = 1
-collision = lt.BGKCollision(lattice, flow.units.relaxation_parameter_lu, force=force, factor=flow.units.convert_acceleration_to_lu(G))
+force = lt.ShanChen(lattice,flow.units.relaxation_parameter_lu,[0,0,0])
+gforce = lt.ShanChen(lattice,flow.units.relaxation_parameter_lu,[0,0,0])
+
+G = 1.001
+collision = lt.BGKCollision(lattice, flow.units.relaxation_parameter_lu, force=force, gforce=gforce,factor=flow.units.convert_acceleration_to_lu(G), g_factor=flow.units.convert_acceleration_to_lu(G)/flow.units.characteristic_velocity_lu)
+print("fac,tau,gfac,gtau",collision.factor,collision.tau,collision.g_factor,collision.g_tau)
 streaming = lt.StandardStreaming(lattice)
 simulation = lt.Simulation(flow, lattice, collision, streaming)
 simulation.initialize_f_neq()  # initialize non-conserved moments
@@ -28,9 +31,9 @@ VTKreport = lt.VTKReporter(lattice, flow, interval=100, filename_base='./data/ou
 simulation.reporters.append(VTKreport)
 print(collision.factor)
 # ---------- Simulate until time = 10 (PU) -------------
-print("Simulating", int(simulation.flow.units.convert_time_to_lu(10)), "steps! Maybe drink some water in the meantime.")
+print("Simulating", int(simulation.flow.units.convert_time_to_lu(20)), "steps! Maybe drink some water in the meantime.")
 # runs simulation, but also returns overall performance in MLUPS (million lattice units per second)
-print("MLUPS: ", simulation.step(int(simulation.flow.units.convert_time_to_lu(10))))
+print("MLUPS: ", simulation.step(int(simulation.flow.units.convert_time_to_lu(20))))
 
 # ---------- Plot kinetic energy over time (PU) -------------
 # grab output of kinetic energy reporter
@@ -38,24 +41,4 @@ E = np.asarray(kinE_reporter.out)
 # normalize to size of grid, not always necessary
 E[:, 1] = E[:, 1] / (2 * np.pi) ** 3
 # save kinetic energy values for later use
-np.save("TGV3DoutRes" + str(resolution) + "E", E)
-fig = plt.figure()
-ax1 = plt.subplot(1, 2, 1)
-plt.xlabel('Time in physical units')
-plt.ylabel('Kinetic energy in physical units')
-ax1.plot(simulation.flow.units.convert_time_to_pu(range(0, E.shape[0])), E[:, 1])
-
-# ---------- Plot magnitude of speed in slice of 3D volume -------------
-# grab u in PU
-u = simulation.flow.units.convert_velocity_to_pu(simulation.lattice.u(simulation.f))
-# [direction of u: Y, X, Z] (due to ij indexing)
-uMagnitude = torch.pow(torch.pow(u[0, :, :, :], 2) + torch.pow(u[1, :, :, :], 2) + torch.pow(u[2, :, :, :], 2), 0.5)
-# select slice to plot
-uMagnitude = uMagnitude[:, :, round(0.1 * resolution)]
-# send selected slice to CPU und numpy, to be able to plot it via matplotlib
-uMagnitude = uMagnitude.cpu().numpy()
-ax2 = plt.subplot(1, 2, 2)
-ax2.matshow(uMagnitude)
-plt.tight_layout()
-plt.show()
-plt.savefig('tgv3d-output.pdf')
+np.save("TGV3DoutRes" + str(resolution) + "G" + str(G), E)

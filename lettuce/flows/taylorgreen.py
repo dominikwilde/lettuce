@@ -57,7 +57,7 @@ class TaylorGreenVortex3D:
             np.zeros_like(np.sin(x[0]))
         ])
         p = np.array([1 / 16. * (np.cos(2 * x[0]) + np.cos(2 * x[1])) * (np.cos(2 * x[2]) + 2)])
-        rho_prime = 20*((x[2])/(2*np.pi)-0.5)
+        rho_prime = np.ones_like(p)
 
         return p, u, rho_prime
 

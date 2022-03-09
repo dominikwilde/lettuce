@@ -14,31 +14,43 @@ __all__ = [
 
 
 class BGKCollision:
-    def __init__(self, lattice, tau, force=None, factor=None):
+    def __init__(self, lattice, tau, force=None, factor=None, g_factor = None, g_tau=None, gforce=None):
         self.force = force
         self.lattice = lattice
         self.tau = tau
         self.factor = factor
+        self.g_factor = g_factor
+        self.gforce = gforce
+
+        if g_tau is not None:
+            self.g_tau = g_tau
+        else:
+            self.g_tau = tau
 
     def __call__(self, f, g=None):
         rho = self.lattice.rho(f)
         rho_prime = self.lattice.rho(g)
         u=self.lattice.u(f)
         if self.force is not None:
-            factor = self.factor # TODO Set factor
             if self.lattice.D == 2:
                 self.force.acceleration = u*0.0
-                self.force.acceleration[1] = -factor * (rho_prime[0] - 1.0)
+                self.force.acceleration[1] = -self.factor * (rho_prime[0] - 1.0)
+                self.gforce.acceleration = u * 0.0
+                self.gforce.acceleration[1] = -self.g_factor*u[1]
             if self.lattice.D == 3:
                 self.force.acceleration = u*0.0
-                self.force.acceleration[2] = -factor * (rho_prime[0] - 1.0)
-
+                self.force.acceleration[2] = -self.factor * (rho_prime[0] - 1.0)
+                self.gforce.acceleration = u * 0.0
+                self.gforce.acceleration[2] = -self.g_factor*u[2]
         u_eq = 0 if self.force is None else self.force.u_eq(f)
-        u = self.lattice.u(f) + u_eq
-        feq = self.lattice.equilibrium(rho, u)
-        geq = self.lattice.equilibrium(rho_prime, u)
+        feq = self.lattice.equilibrium(rho, u + u_eq)
+        del u_eq
+        u_geq = 0 if self.force is None else self.gforce.u_eq(g)
+        geq = self.lattice.equilibrium(rho_prime, u + u_geq)
+        del u_geq
         Si = 0 if self.force is None else self.force.source_term(u)
-        return [f - 1.0 / self.tau * (f - feq) + Si, g - 1.0 / self.tau * (g - geq)]
+        Si_g = 0 if self.gforce is None else self.gforce.source_term(u)
+        return [f - 1.0 / self.tau * (f - feq) + Si, g - 1.0 / self.g_tau * (g - geq) + Si_g]
 
 
 class MRTCollision:
