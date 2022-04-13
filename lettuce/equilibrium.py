@@ -1,11 +1,24 @@
 import torch
 
-__all__ = ["Equilibrium", "QuadraticEquilibrium", "IncompressibleQuadraticEquilibrium",
+__all__ = ["Equilibrium", "LinearEquilibrium", "QuadraticEquilibrium", "IncompressibleQuadraticEquilibrium",
            "QuadraticEquilibrium_LessMemory"]
 
 
 class Equilibrium:
     pass
+
+class LinearEquilibrium(Equilibrium):
+    def __init__(self, lattice):
+        self.lattice = lattice
+
+    def __call__(self, rho, u, *args):
+        exu = torch.tensordot(self.lattice.e, u, dims=1)
+        feq = self.lattice.einsum(
+            "q,q->q",
+            [self.lattice.w,
+             rho * (exu / self.lattice.cs ** 2 + 1)]
+        )
+        return feq
 
 
 class QuadraticEquilibrium(Equilibrium):

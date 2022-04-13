@@ -14,43 +14,74 @@ __all__ = [
 
 
 class BGKCollision:
-    def __init__(self, lattice, tau, force=None, factor=None, g_factor = None, g_tau=None, gforce=None):
+    def __init__(self, lattice, tau, force=None, factor=None, g_factor=None, g_tau=None, g_lattice=None, do_kbc=False, oscillation=None):
         self.force = force
         self.lattice = lattice
         self.tau = tau
         self.factor = factor
         self.g_factor = g_factor
-        self.gforce = gforce
+        self.g_lattice = g_lattice
+        self.do_kbc = do_kbc
+
+        self.oscillation = oscillation
+
+        if g_lattice is None:
+            self.g_lattice = lattice
 
         if g_tau is not None:
             self.g_tau = g_tau
         else:
-            self.g_tau = tau
+            self.g_tau = (tau - 0.5) / 0.7 + 0.5
 
-    def __call__(self, f, g=None):
+        if do_kbc:
+            assert(self.force.__class__.__name__ == "Kupertosh")
+            self.kbc = KBCCollision3D(self.lattice, self.tau)
+
+
+    def __call__(self, f, g=None, timestep=None):
         rho = self.lattice.rho(f)
-        rho_prime = self.lattice.rho(g)
-        u=self.lattice.u(f)
-        if self.force is not None:
-            if self.lattice.D == 2:
-                self.force.acceleration = u*0.0
-                self.force.acceleration[1] = -self.factor * (rho_prime[0] - 1.0)
-                self.gforce.acceleration = u * 0.0
-                self.gforce.acceleration[1] = -self.g_factor*u[1]
-            if self.lattice.D == 3:
-                self.force.acceleration = u*0.0
-                self.force.acceleration[2] = -self.factor * (rho_prime[0] - 1.0)
-                self.gforce.acceleration = u * 0.0
-                self.gforce.acceleration[2] = -self.g_factor*u[2]
+        u = self.lattice.u(f)
+        Q = -self.g_factor * torch.mul(u[2][..., None], self.g_lattice.w)  # -(1-1/(2*self.g_tau))*
+
+        self.force.acceleration = torch.zeros_like(u)
+        #center_x = int(self.force.acceleration.shape[1] / 2)
+        #center_y = int(self.force.acceleration.shape[2] / 2)
+        #if self.lattice.D == 3:
+            #center_z = int(self.force.acceleration.shape[3] / 2)
+        #Q[center_x - 3: center_x + 3,:, center_z - 3: center_z + 3]=0
+
+        #Q[center_x-1:center_x+1,:,center_z-1:center_z+1] =-self.g_factor*0.01*np.sin(2*np.pi*self.oscillation.frequency_lu*timestep)*self.g_lattice.w
+        rho_prime = self.g_lattice.rho(g) + (1 - 1 / (2 * self.g_tau)) * Q.permute(3, 0, 1, 2)
+        self.force.acceleration = torch.zeros_like(u)
+        self.force.acceleration[-1] = -self.factor * (rho_prime[0] - 1.0)
+
+        if self.oscillation is not None:
+            center_x = int(self.force.acceleration.shape[1]/2)
+            center_y = int(self.force.acceleration.shape[2]/2)
+            if self.lattice.D==3:
+                center_z = int(self.force.acceleration.shape[3]/2)
+
+            self.force.acceleration[-1,center_x-3:center_x+3,:,center_z-3:center_z+3] += self.oscillation.magnitude*np.sin(2*np.pi*self.oscillation.frequency_lu*timestep)
+
+
         u_eq = 0 if self.force is None else self.force.u_eq(f)
-        feq = self.lattice.equilibrium(rho, u + u_eq)
-        del u_eq
-        u_geq = 0 if self.force is None else self.gforce.u_eq(g)
-        geq = self.lattice.equilibrium(rho_prime, u + u_geq)
-        del u_geq
+        u = u + u_eq
+
+        feq = self.lattice.equilibrium(rho, u)
+        if self.lattice is self.g_lattice:
+            geq = feq / rho * rho_prime
+        else:
+            geq = self.g_lattice.equilibrium(rho_prime, u)
+
         Si = 0 if self.force is None else self.force.source_term(u)
-        Si_g = 0 if self.gforce is None else self.gforce.source_term(u)
-        return [f - 1.0 / self.tau * (f - feq) + Si, g - 1.0 / self.g_tau * (g - geq) + Si_g]
+        if self.force.__class__.__name__ == "Kupertosh":
+            Si = self.lattice.equilibrium(rho, u + self.force.acceleration) - feq
+
+        if self.do_kbc:
+            f = self.kbc(f)
+            return [f + Si,  g - 1.0 / self.g_tau * (g - geq) + Q.permute(3, 0, 1, 2)]
+
+        return [f - 1.0 / self.tau * (f - feq) + Si, g - 1.0 / self.g_tau * (g - geq) + Q.permute(3, 0, 1, 2)]
 
 
 class MRTCollision:
@@ -292,6 +323,7 @@ class KBCCollision3D:
         f = f - self.beta * (2 * delta_s + gamma_stab * delta_h)
 
         return f
+
 
 
 class SmagorinskyCollision:

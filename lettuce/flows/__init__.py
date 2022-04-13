@@ -8,6 +8,7 @@ from lettuce.flows.obstacle import Obstacle2D, Obstacle3D
 from lettuce.flows.poiseuille import PoiseuilleFlow2D
 from lettuce.flows.doublyshear import DoublyPeriodicShear2D
 from lettuce.flows.decayingturbulence import DecayingTurbulence
+from lettuce.flows.gravityWave import GravityWaves2D,GravityWaves3D
 from lettuce.stencils import D2Q9, D3Q19
 
 flow_by_name = {

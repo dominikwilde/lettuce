@@ -9,22 +9,26 @@ import numpy as np
 from lettuce.util import torch_gradient
 from packaging import version
 
-__all__ = ["Observable", "MaximumVelocity", "IncompressibleKineticEnergy", "Enstrophy", "EnergySpectrum"]
+__all__ = ["Observable", "MaximumVelocity", "PotentialEnergy", "IncompressibleKineticEnergy", "Enstrophy",
+           "DensityEnstrophy", "EnergySpectrum"]
 
 
 class Observable:
-    def __init__(self, lattice, flow):
+    def __init__(self, lattice, flow, g_lattice=None):
         self.lattice = lattice
+        self.g_lattice = g_lattice
+        if g_lattice is None:
+            g_lattice = lattice
         self.flow = flow
 
-    def __call__(self, f):
-        raise NotImplementedError
+    def __call__(self, f, g=None):
+        return torch.zeros(0)
 
 
 class MaximumVelocity(Observable):
     """Maximum velocitiy"""
 
-    def __call__(self, f):
+    def __call__(self, f, g=None):
         u = self.lattice.u(f)
         return self.flow.units.convert_velocity_to_pu(torch.norm(u, dim=0).max())
 
@@ -32,11 +36,21 @@ class MaximumVelocity(Observable):
 class IncompressibleKineticEnergy(Observable):
     """Total kinetic energy of an incompressible flow."""
 
-    def __call__(self, f):
+    def __call__(self, f, g=None):
         dx = self.flow.units.convert_length_to_pu(1.0)
         kinE = self.flow.units.convert_incompressible_energy_to_pu(torch.sum(self.lattice.incompressible_energy(f)))
         kinE *= dx ** self.lattice.D
         return kinE
+
+
+class PotentialEnergy(Observable):
+    """Total kinetic energy of an incompressible flow."""
+
+    def __call__(self, f, g=None):
+        dx = self.flow.units.convert_length_to_pu(1.0)
+        potE = self.flow.units.convert_density_to_pu(0.5 * torch.sum((self.g_lattice.rho(g) - 1.0) ** 2))
+        potE *= dx ** self.lattice.D
+        return potE
 
 
 class Enstrophy(Observable):
@@ -47,7 +61,7 @@ class Enstrophy(Observable):
     The function only works for periodic domains
     """
 
-    def __call__(self, f):
+    def __call__(self, f, g=None):
         u0 = self.flow.units.convert_velocity_to_pu(self.lattice.u(f)[0])
         u1 = self.flow.units.convert_velocity_to_pu(self.lattice.u(f)[1])
         dx = self.flow.units.convert_length_to_pu(1.0)
@@ -61,6 +75,25 @@ class Enstrophy(Observable):
                 (grad_u2[1] - grad_u1[2]) * (grad_u2[1] - grad_u1[2])
                 + ((grad_u0[2] - grad_u2[0]) * (grad_u0[2] - grad_u2[0]))
             )
+        return vorticity * dx ** self.lattice.D
+
+
+class DensityEnstrophy(Observable):
+    """The integral of the vorticity
+
+    Notes
+    -----
+    The function only works for periodic domains
+    """
+
+    def __call__(self, f, g):
+        rho = self.g_lattice.rho(g)[0]
+        dx = self.flow.units.convert_length_to_pu(1.0)
+        grad_rho = torch_gradient(rho, dx=dx, order=6)
+        vorticity = torch.sum(grad_rho[0] * grad_rho[0] + grad_rho[1] * grad_rho[1])
+        if self.lattice.D == 3:
+            vorticity += torch.sum(grad_rho[2] * grad_rho[2])
+
         return vorticity * dx ** self.lattice.D
 
 
@@ -86,7 +119,7 @@ class EnergySpectrum(Observable):
                 (wavenorms[..., None] <= self.wavenumbers.to(dtype=lattice.dtype, device=lattice.device) + 0.5)
         )
 
-    def __call__(self, f):
+    def __call__(self, f, g=None):
         u = self.lattice.u(f)
         return self.spectrum_from_u(u)
 
@@ -135,7 +168,7 @@ class Mass(Observable):
         super(Mass, self).__init__(lattice, flow)
         self.mask = no_mass_mask
 
-    def __call__(self, f):
+    def __call__(self, f, g=None):
         mass = f[..., 1:-1, 1:-1].sum()
         if self.mask is not None:
             mass -= (f * self.mask.to(dtype=torch.float)).sum()

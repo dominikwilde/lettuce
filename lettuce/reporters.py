@@ -65,7 +65,7 @@ class VTKReporter:
                 for d in range(self.lattice.D):
                     self.point_dict[f"u{'xyz'[d]}"] = self.lattice.convert_to_numpy(u[d, ...])
                 if g is not None:
-                    rho_prime = self.flow.units.convert_density_lu_to_pressure_pu(self.lattice.rho(g))
+                    rho_prime = (self.lattice.rho(g))
                     self.point_dict["rho_prime"] = self.lattice.convert_to_numpy(rho_prime[0, ...])
             write_vtk(self.point_dict, i, self.filename_base)
 
@@ -140,7 +140,11 @@ class ObservableReporter:
 
     def __call__(self, i, t, f,g=None):
         if i % self.interval == 0:
-            observed = self.observable.lattice.convert_to_numpy(self.observable(f))
+            observed = None
+            if g is not None:
+                observed = self.observable.lattice.convert_to_numpy(self.observable(f,g))
+            else:
+                observed = self.observable.lattice.convert_to_numpy(self.observable(f))
             assert len(observed.shape) < 2
             if len(observed.shape) == 0:
                 observed = [observed.item()]

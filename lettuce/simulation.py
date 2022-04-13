@@ -24,9 +24,15 @@ class Simulation:
 
     """
 
-    def __init__(self, flow, lattice, collision, streaming):
+    def __init__(self, flow, lattice, collision, streaming, g_lattice = None, g_streaming=None):
         self.flow = flow
         self.lattice = lattice
+        if g_streaming is None:
+            g_lattice = lattice
+            self.g_streaming = streaming
+        else:
+            self.g_streaming = g_streaming
+
         self.collision = collision
         self.streaming = streaming
         self.i = 0
@@ -45,7 +51,7 @@ class Simulation:
         rho = lattice.convert_to_tensor(flow.units.convert_pressure_pu_to_density_lu(p))
         rho_prime = lattice.convert_to_tensor(flow.units.convert_pressure_pu_to_density_lu(rho_prime))
         self.f = lattice.equilibrium(rho, lattice.convert_to_tensor(u))
-        self.g = lattice.equilibrium(rho_prime, lattice.convert_to_tensor(u))
+        self.g = g_lattice.equilibrium(rho_prime, lattice.convert_to_tensor(u))
         self.reporters = []
 
         # Define masks, where the collision or streaming are not applied
@@ -71,9 +77,9 @@ class Simulation:
         for _ in range(num_steps):
             self.i += 1
             self.f = self.streaming(self.f)
-            self.g = self.streaming(self.g)
+            self.g = self.g_streaming(self.g)
             # Perform the collision routine everywhere, expect where the no_collision_mask is true
-            fg = self.collision(self.f, self.g)
+            fg = self.collision(self.f, self.g, self.i)
             self.f = torch.where(self.no_collision_mask, self.f, fg[0])
             self.g = torch.where(self.no_collision_mask, self.g, fg[1])
             for boundary in self._boundaries:

@@ -1,4 +1,4 @@
-__all__ = ["Guo", "ShanChen"]
+__all__ = ["Guo", "ShanChen","Kupertosh"]
 
 
 class Guo:
@@ -19,7 +19,7 @@ class Guo:
 
     def u_eq(self, f):
         index = [Ellipsis] + [None] * self.lattice.D
-        return self.ueq_scaling_factor * self.acceleration[index] / self.lattice.rho(f)
+        return self.ueq_scaling_factor * self.acceleration/ self.lattice.rho(f)
 
     @property
     def ueq_scaling_factor(self):
@@ -42,3 +42,15 @@ class ShanChen:
     @property
     def ueq_scaling_factor(self):
         return self.tau * 1
+
+class Kupertosh:
+    def __init__(self, lattice, tau, acceleration):
+        self.lattice = lattice
+        self.tau = tau
+        self.acceleration = lattice.convert_to_tensor(acceleration)
+
+    def source_term(self, u):
+        return 0
+
+    def u_eq(self, f):
+        return 0

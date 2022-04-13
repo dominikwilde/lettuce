@@ -1,6 +1,6 @@
 import numpy as np
 
-__all__ = ["Stencil", "D1Q3", "D2Q9", "D3Q15", "D3Q19", "D3Q27"]
+__all__ = ["Stencil", "D1Q3", "D2Q9", "D3Q7", "D3Q15", "D3Q19", "D3Q27"]
 
 
 class Stencil:
@@ -27,7 +27,21 @@ class D2Q9(Stencil):
     cs = 1 / np.sqrt(3)
     opposite = [0, 3, 4, 1, 2, 7, 8, 5, 6]
 
+class D3Q7(Stencil):
+    e = np.array([
+        [0, 0, 0],
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1]])
 
+    w = np.array([1.0 / 4.0] + [1.0 / 8.0] * 6)
+    cs = 1 / 2
+    opposite = [
+        0, 2, 1, 4, 3, 6, 5,
+    ]
 class D3Q15(Stencil):
     e = np.array([
         [0, 0, 0],
