@@ -14,7 +14,7 @@ __all__ = [
 
 
 class BGKCollision:
-    def __init__(self, lattice, tau, force=None, factor=None, g_factor=None, g_tau=None, g_lattice=None, do_kbc=False, oscillation=None):
+    def __init__(self, lattice, tau, force=None, factor=None, g_factor=None, g_tau=None, g_lattice=None, do_kbc=False, oscillation=None, do_smagorinsky=False):
         self.force = force
         self.lattice = lattice
         self.tau = tau
@@ -22,6 +22,7 @@ class BGKCollision:
         self.g_factor = g_factor
         self.g_lattice = g_lattice
         self.do_kbc = do_kbc
+        self.do_smagorinsky = do_smagorinsky
 
         self.oscillation = oscillation
 
@@ -34,8 +35,14 @@ class BGKCollision:
             self.g_tau = (tau - 0.5) / 0.7 + 0.5
 
         if do_kbc:
+            assert(do_smagorinsky==False)
             assert(self.force.__class__.__name__ == "Kupertosh")
-            self.kbc = KBCCollision3D(self.lattice, self.tau)
+            self.alternate_collision = KBCCollision3D(self.lattice, self.tau)
+
+        if do_smagorinsky:
+            assert(do_kbc==False)
+            assert(self.force.__class__.__name__ == "Kupertosh")
+            self.alternate_collision = SmagorinskyCollision(self.lattice,self.tau)
 
 
     def __call__(self, f, g=None, timestep=None):
@@ -77,8 +84,8 @@ class BGKCollision:
         if self.force.__class__.__name__ == "Kupertosh":
             Si = self.lattice.equilibrium(rho, u + self.force.acceleration) - feq
 
-        if self.do_kbc:
-            f = self.kbc(f)
+        if self.do_kbc or self.do_smagorinsky:
+            f = self.alternate_collision(f)
             return [f + Si,  g - 1.0 / self.g_tau * (g - geq) + Q.permute(3, 0, 1, 2)]
 
         return [f - 1.0 / self.tau * (f - feq) + Si, g - 1.0 / self.g_tau * (g - geq) + Q.permute(3, 0, 1, 2)]

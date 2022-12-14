@@ -115,8 +115,8 @@ class EnergySpectrum(Observable):
 
         self.wavenumbers = torch.arange(int(torch.max(wavenorms)))
         self.wavemask = (
-                (wavenorms[..., None] > self.wavenumbers.to(dtype=lattice.dtype, device=lattice.device) - 0.5) &
-                (wavenorms[..., None] <= self.wavenumbers.to(dtype=lattice.dtype, device=lattice.device) + 0.5)
+                (wavenorms[..., None].cpu() > self.wavenumbers.to(dtype=lattice.dtype, device='cpu') - 0.5) &
+                (wavenorms[..., None].cpu() <= self.wavenumbers.to(dtype=lattice.dtype, device='cpu') + 0.5)
         )
 
     def __call__(self, f, g=None):
@@ -125,10 +125,10 @@ class EnergySpectrum(Observable):
 
     def spectrum_from_u(self, u):
         u = self.flow.units.convert_velocity_to_pu(u)
-        ekin = self._ekin_spectrum(u)
-        ek = ekin[..., None] * self.wavemask.to(dtype=self.lattice.dtype)
-        ek = ek.sum(torch.arange(self.lattice.D).tolist())
-        return ek
+        ekin = self._ekin_spectrum(u).cpu()
+        a = self.wavemask.to(dtype=self.lattice.dtype)
+        ek = torch.einsum('ijk,ijkw->w',ekin, a)
+        return ek.to(device=self.lattice.device)
 
     def _ekin_spectrum(self, u):
         """distinguish between different torch versions"""

@@ -11,14 +11,13 @@ print("start")
 # ---------- Set up simulation -------------
 device = torch.device("cuda:0")  # replace with device("cpu"), if no GPU is available
 lattice = lt.Lattice(lt.D3Q27, device=device, dtype=torch.float32)  # single precision - float64 for double precision#
-g_lattice = lt.Lattice(lt.D3Q7, device=device, dtype=torch.float32)  # single precision - float64 for double precision
+g_lattice =lt.Lattice(lt.D3Q7, device=device, dtype=torch.float32)  # single precision - float64 for double precision
 #g_lattice.equilibrium = lt.LinearEquilibrium(g_lattice)
-
-resolution = 128  # resolution of the lattice, low resolution leads to unstable speeds somewhen after 10 (PU)
-flow = lt.TaylorGreenVortex3D(resolution, 1600, 0.05, lattice)
+tmax=30
+resolution = 104  # resolution of the lattice, low resolution leads to unstable speeds somewhen after 10 (PU)
+flow = lt.TaylorGreenVortex3D(resolution, 1600, 0.1, lattice)
 
 do_kbc = False
-print("KBC Collision is", do_kbc)
 
 # select collision model - try also KBCCollision or RegularizedCollision
 force = lt.ShanChen(lattice,flow.units.relaxation_parameter_lu,[0,0,0])
@@ -26,8 +25,8 @@ if do_kbc:
     force = lt.Kupertosh(lattice,flow.units.relaxation_parameter_lu,[0,0,0])
 
 
-Fr = 0.16
-drho_dz=-1
+Fr = 1
+drho_dz=-1/Fr**2 #-flow.units.characteristic_length_lu
 print(flow.units.characteristic_length_lu,flow.units.characteristic_velocity_lu,flow.units.convert_time_to_pu(1))
 G = -(flow.units.characteristic_velocity_lu/(Fr*flow.units.characteristic_length_lu))**2/drho_dz*flow.units.characteristic_length_lu
 g_tau = flow.units.viscosity_lu / g_lattice.stencil.cs ** 2 / 0.7 + 0.5
@@ -56,7 +55,7 @@ timestepReporter =lt.ObservableReporter(timestep,interval=100)
 simulation.reporters.append(timestepReporter)
 
 spectrum = lt.EnergySpectrum(lattice,flow)
-spectrumReporter = lt.ObservableReporter(spectrum,interval=int(simulation.flow.units.convert_time_to_lu(10)), out=None)
+spectrumReporter = lt.ObservableReporter(spectrum,interval=int(simulation.flow.units.convert_time_to_lu(15.01)), out=None)
 
 
 simulation.reporters.append(deReporter)
@@ -64,13 +63,13 @@ simulation.reporters.append(enstrophyReporter)
 simulation.reporters.append(potentialReporter)
 simulation.reporters.append(spectrumReporter)
 # Output: separate VTK-file with ux,uy,uz and p for every time step in ../data
-VTKreport = lt.VTKReporter(lattice, flow, interval=int(simulation.flow.units.convert_time_to_lu(5)), filename_base='./data/tgv_{}'.format(Fr))
+VTKreport = lt.VTKReporter(lattice, flow, interval=int(simulation.flow.units.convert_time_to_lu(5)), filename_base='./data/tgv_{}_{}'.format(Fr,resolution))
 simulation.reporters.append(VTKreport)
 print(collision.factor)
 # ---------- Simulate until time = 10 (PU) -------------
-print("Simulating", int(simulation.flow.units.convert_time_to_lu(30)), "steps! Maybe drink some water in the meantime.")
+print("Simulating", int(simulation.flow.units.convert_time_to_lu(tmax)), "steps! Maybe drink some water in the meantime.")
 # runs simulation, but also returns overall performance in MLUPS (million lattice units per second)
-print("MLUPS: ", simulation.step(int(simulation.flow.units.convert_time_to_lu(30))))
+print("MLUPS: ", simulation.step(int(simulation.flow.units.convert_time_to_lu(tmax))))
 
 # ---------- Plot kinetic energy over time (PU) -------------
 # grab output of kinetic energy reporter
